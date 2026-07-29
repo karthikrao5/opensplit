@@ -49,7 +49,8 @@ through the schema.
 User
   id           uuid, pk
   externalId   string, unique   -- Auth0 sub
-  displayName  string
+  displayName  string           -- Auth0 profile name or nickname; falls back
+                                -- to the local part of the email when absent
   createdAt    timestamp
 
 Group
@@ -63,7 +64,8 @@ GroupMember
   groupId      fk -> Group, indexed
   displayName  string
   userId       fk -> User, nullable
-  claimToken   string, unique, nullable
+  claimToken   string, unique, nullable  -- generated when the member is
+                                         -- created as a placeholder
   createdAt    timestamp
   unique (groupId, userId) where userId is not null
 
@@ -81,7 +83,8 @@ TransactionSplit
   id             uuid, pk
   transactionId  fk -> Transaction, cascade delete, indexed
   memberId       fk -> GroupMember
-  shareMinor     int              -- always positive
+  shareMinor     int              -- >= 0; a share is zero when the amount is
+                                  -- smaller than the number of members
   unique (transactionId, memberId)
 ```
 
@@ -160,10 +163,12 @@ helper:
 requireMembership(groupId): Promise<{ user, member, group }>
 ```
 
-It throws `notFound()` when the current user has no `GroupMember` row with
-`userId = user.id` in that group — 404 rather than 403, so the existence of a
-group is not disclosed to non-members. Every page and Server Action that
-touches group data calls it first.
+It throws `NotMemberError` when the current user has no `GroupMember` row with
+`userId = user.id` in that group. Callers translate that one error two ways:
+pages call `notFound()`, and Server Actions return
+`{ ok: false, error: 'Not found' }`. Both surface as "not found" rather than
+"forbidden", so the existence of a group is not disclosed to non-members. Every
+page and Server Action that touches group data calls `requireMembership` first.
 
 **Member references from the client are never trusted.** Every `memberId` in an
 action's input — the payer and each split target — is looked up with
@@ -278,11 +283,16 @@ amount, date.
 
 - Server Actions validate with Zod and return `{ ok: false, error }`; forms
   render errors via `useActionState`.
-- Rejected inputs: non-positive amount; amount above a fixed ceiling; empty
-  included-members list; any `memberId` not belonging to the group.
+- Rejected inputs: non-positive amount; amount above `MAX_AMOUNT_MINOR`, a
+  constant set to 1,000,000,000 minor units; empty included-members list; any
+  `memberId` not belonging to the group.
 - A payer who is not included in the split is allowed — this represents one
   member treating the others.
-- Missing group and non-member access both produce `notFound()`.
+- Missing group and non-member access are indistinguishable: `notFound()` on
+  pages, `{ ok: false, error: 'Not found' }` from actions.
+- `updateTransaction` deletes and recreates the transaction's split rows from
+  the submitted amount and included-member list, inside the same database
+  transaction. Splits are never patched in place.
 - Concurrent edits are last-write-wins. No optimistic locking or version
   column. This is a deliberate choice for this version.
 
