@@ -10,6 +10,35 @@
 
 Source spec: `docs/superpowers/specs/2026-07-29-opensplit-design.md`
 
+## Operator prerequisites
+
+Most of this plan runs unattended, but four points need a human. An executing
+agent must stop at each and not proceed until the operator has acted or
+confirmed.
+
+**Setup (blocking):**
+
+- **S1 — Local Postgres (before Task 3 Step 4).** A Postgres server must be
+  running and reachable at the `.env` `DATABASE_URL`. The plan runs
+  `createdb opensplit` / `opensplit_test`; providing the server is the
+  operator's job.
+- **S2 — Auth0 tenant (Task 4 Step 2).** Create a Regular Web Application,
+  enable the Username-Password connection, set the callback and logout URLs,
+  and fill `AUTH0_DOMAIN`, `AUTH0_CLIENT_ID`, `AUTH0_CLIENT_SECRET`,
+  `AUTH0_SECRET`, and `APP_BASE_URL` in `.env`.
+
+Deployment (Vercel + managed Postgres) is out of scope for this plan.
+
+**Verification gates (🛑 — stop and wait for operator confirmation):**
+
+- **V1 — Task 4 Step 9:** the login round trip.
+- **V2 — Task 8 Step 6:** the full invite loop.
+- **V3 — Task 10 Step 7:** the full app flow.
+
+**Runs unattended:** Tasks 1, 2, 5, 6, 7, and 9 need no operator involvement
+(pure logic plus integration tests against the Postgres from S1). Tasks 3, 4,
+8, and 10 contain the touchpoints above.
+
 ## Global Constraints
 
 Every task's requirements implicitly include this section.
@@ -1056,7 +1085,7 @@ export default async function LandingPage() {
 }
 ```
 
-- [ ] **Step 9: Verify the login round trip by hand**
+- [ ] **Step 9: 🛑 OPERATOR GATE (V1) — verify the login round trip by hand**
 
 Run `npm run dev`, open `http://localhost:3000`, click Log in, sign up with an email and password, and confirm you land back on the site. Then check the row exists:
 
@@ -1065,6 +1094,8 @@ npx prisma studio
 ```
 
 Expected: exactly one `User` row whose `externalId` starts with `auth0|`.
+
+Stop here and wait for the operator to confirm V1 before starting Task 5.
 
 - [ ] **Step 10: Commit**
 
@@ -2312,29 +2343,41 @@ export async function claimMember(input: {
     const parsed = claimSchema.safeParse(input)
     if (!parsed.success) throw new ValidationError('This invite link is not valid.')
 
-    const member = await prisma.groupMember.findUnique({
-      where: { claimToken: parsed.data.token },
-    })
-    if (!member) {
-      throw new ValidationError(
-        'This invite link is not valid or has already been used.',
-      )
-    }
+    // The whole claim runs in one transaction, and the write is conditional on
+    // the token still being present. Two users racing on the same link cannot
+    // both win: under Read Committed the second updateMany re-evaluates its
+    // WHERE against the row the first transaction committed — claimToken is now
+    // null, so it matches nothing and is rejected as already-used.
+    groupId = await prisma.$transaction(async (tx) => {
+      const member = await tx.groupMember.findUnique({
+        where: { claimToken: parsed.data.token },
+      })
+      if (!member) {
+        throw new ValidationError(
+          'This invite link is not valid or has already been used.',
+        )
+      }
 
-    const existing = await prisma.groupMember.findFirst({
-      where: { groupId: member.groupId, userId: user.id },
-    })
-    if (existing) {
-      throw new ValidationError(
-        `You are already in this group as ${existing.displayName}.`,
-      )
-    }
+      const existing = await tx.groupMember.findFirst({
+        where: { groupId: member.groupId, userId: user.id },
+      })
+      if (existing) {
+        throw new ValidationError(
+          `You are already in this group as ${existing.displayName}.`,
+        )
+      }
 
-    await prisma.groupMember.update({
-      where: { id: member.id },
-      data: { userId: user.id, claimToken: null },
+      const claimed = await tx.groupMember.updateMany({
+        where: { id: member.id, claimToken: parsed.data.token },
+        data: { userId: user.id, claimToken: null },
+      })
+      if (claimed.count !== 1) {
+        throw new ValidationError(
+          'This invite link is not valid or has already been used.',
+        )
+      }
+      return member.groupId
     })
-    groupId = member.groupId
   })
 
   if (result.ok && groupId) {
@@ -2427,9 +2470,11 @@ export function ClaimButton({ token }: { token: string }) {
 }
 ```
 
-- [ ] **Step 6: Verify the full invite loop by hand**
+- [ ] **Step 6: 🛑 OPERATOR GATE (V2) — verify the full invite loop by hand**
 
 With `npm run dev` running: create a group, add a placeholder member, copy the invite link, open it in a private window, sign up as a second user, and confirm you join the group and appear as claimed. Then reopen the same link in a third window and confirm it reports the link is invalid or used.
+
+Stop here and wait for the operator to confirm V2 before starting Task 9.
 
 - [ ] **Step 7: Commit**
 
@@ -3753,7 +3798,7 @@ export default async function GroupPage({
 }
 ```
 
-- [ ] **Step 7: Verify the whole flow by hand**
+- [ ] **Step 7: 🛑 OPERATOR GATE (V3) — verify the whole flow by hand**
 
 With `npm run dev`:
 
@@ -3763,6 +3808,8 @@ With `npm run dev`:
 4. Click Record on one suggestion, save it, and confirm that balance drops to zero and the transfer disappears.
 5. Try to remove a member who has transactions and confirm the refusal message appears.
 6. Open the group URL while logged in as an unrelated third user and confirm a 404.
+
+Stop here and wait for the operator to confirm V3 before the final build and commit.
 
 - [ ] **Step 8: Run the whole suite and the production build**
 
