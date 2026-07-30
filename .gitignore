@@ -40,3 +40,7 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# Spurious pnpm files (project uses npm; some tooling regenerates these)
+pnpm-lock.yaml
+pnpm-workspace.yaml
