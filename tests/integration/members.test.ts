@@ -141,6 +141,46 @@ describe('removeMember', () => {
     expect(await prisma.groupMember.count()).toBe(2)
   })
 
+  it('refuses to remove the last claimed member (sole member)', async () => {
+    const { alice, group, aliceMember } = await seedGroup()
+    mockCurrentUser(alice)
+
+    const result = await removeMember({ groupId: group.id, memberId: aliceMember.id })
+    expect(result).toMatchObject({ ok: false })
+    expect(
+      await prisma.groupMember.findUnique({ where: { id: aliceMember.id } }),
+    ).not.toBeNull()
+    expect(await prisma.groupMember.count()).toBe(1)
+  })
+
+  it('lets the sole claimed member remove a placeholder', async () => {
+    const { alice, group } = await seedGroup()
+    mockCurrentUser(alice)
+    await addPlaceholderMember({ groupId: group.id, displayName: 'Bob' })
+    const bob = await prisma.groupMember.findFirstOrThrow({
+      where: { displayName: 'Bob' },
+    })
+
+    const result = await removeMember({ groupId: group.id, memberId: bob.id })
+    expect(result.ok).toBe(true)
+    expect(await prisma.groupMember.count()).toBe(1)
+  })
+
+  it('removes one claimed member while another claimed member remains', async () => {
+    const { alice, group } = await seedGroup()
+    const bob = await prisma.user.create({
+      data: { externalId: 'auth0|bob', displayName: 'Bob' },
+    })
+    const bobMember = await prisma.groupMember.create({
+      data: { groupId: group.id, displayName: 'Bob', userId: bob.id },
+    })
+    mockCurrentUser(alice)
+
+    const result = await removeMember({ groupId: group.id, memberId: bobMember.id })
+    expect(result.ok).toBe(true)
+    expect(await prisma.groupMember.count()).toBe(1)
+  })
+
   it('refuses a member id from another group', async () => {
     const { alice, group } = await seedGroup()
     const other = await prisma.group.create({

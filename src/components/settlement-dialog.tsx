@@ -35,7 +35,7 @@ export function SettlementDialog({
   prefill: { fromMemberId: string; toMemberId: string; amountMinor: number } | null
   onClose: () => void
 }) {
-  const [fromMemberId, setFrom] = useState(prefill?.fromMemberId ?? members[0].id)
+  const [fromMemberId, setFrom] = useState(prefill?.fromMemberId ?? members[0]?.id ?? '')
   const [toMemberId, setTo] = useState(prefill?.toMemberId ?? members[1]?.id ?? members[0].id)
   const [amountText, setAmountText] = useState(
     prefill ? (prefill.amountMinor / 100).toFixed(2) : '',

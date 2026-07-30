@@ -12,7 +12,10 @@ export type UserClaims = {
 
 function displayNameFrom(claims: UserClaims): string {
   return (
-    claims.name ?? claims.nickname ?? claims.email?.split('@')[0] ?? 'Member'
+    claims.name ??
+    claims.nickname ??
+    (claims.email?.split('@')[0] || undefined) ??
+    'Member'
   )
 }
 

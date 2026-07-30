@@ -1,6 +1,7 @@
 'use server'
 
 import { randomBytes } from 'node:crypto'
+import { Prisma } from '@prisma/client'
 import { revalidatePath } from 'next/cache'
 import { z } from 'zod'
 import { requireUser } from '@/lib/auth'
@@ -8,7 +9,7 @@ import { runAction, ValidationError, type ActionResult } from '@/lib/action-resu
 import { prisma } from '@/lib/db'
 import { requireGroupMemberIds, requireMembership } from '@/lib/membership'
 
-export function newClaimToken(): string {
+function newClaimToken(): string {
   return randomBytes(24).toString('base64url')
 }
 
@@ -72,6 +73,21 @@ export async function removeMember(input: {
       )
     }
 
+    // A group must never become memberless: refuse to remove the last claimed
+    // member, or requireMembership could never grant access again. Removing a
+    // placeholder (userId null) or a claimed member while another remains is fine.
+    const member = await prisma.groupMember.findUnique({
+      where: { id: parsed.data.memberId },
+    })
+    if (member?.userId != null) {
+      const claimedCount = await prisma.groupMember.count({
+        where: { groupId: group.id, userId: { not: null } },
+      })
+      if (claimedCount === 1) {
+        throw new ValidationError('You can\'t remove the last member of the group.')
+      }
+    }
+
     await prisma.groupMember.delete({ where: { id: parsed.data.memberId } })
   })
 
@@ -100,36 +116,49 @@ export async function claimMember(input: {
     // both win: under Read Committed the second updateMany re-evaluates its
     // WHERE against the row the first transaction committed — claimToken is now
     // null, so it matches nothing and is rejected as already-used.
-    groupId = await prisma.$transaction(async (tx) => {
-      const member = await tx.groupMember.findUnique({
-        where: { claimToken: parsed.data.token },
-      })
-      if (!member) {
-        throw new ValidationError(
-          'This invite link is not valid or has already been used.',
-        )
-      }
+    try {
+      groupId = await prisma.$transaction(async (tx) => {
+        const member = await tx.groupMember.findUnique({
+          where: { claimToken: parsed.data.token },
+        })
+        if (!member) {
+          throw new ValidationError(
+            'This invite link is not valid or has already been used.',
+          )
+        }
 
-      const existing = await tx.groupMember.findFirst({
-        where: { groupId: member.groupId, userId: user.id },
-      })
-      if (existing) {
-        throw new ValidationError(
-          `You are already in this group as ${existing.displayName}.`,
-        )
-      }
+        const existing = await tx.groupMember.findFirst({
+          where: { groupId: member.groupId, userId: user.id },
+        })
+        if (existing) {
+          throw new ValidationError(
+            `You are already in this group as ${existing.displayName}.`,
+          )
+        }
 
-      const claimed = await tx.groupMember.updateMany({
-        where: { id: member.id, claimToken: parsed.data.token },
-        data: { userId: user.id, claimToken: null },
+        const claimed = await tx.groupMember.updateMany({
+          where: { id: member.id, claimToken: parsed.data.token },
+          data: { userId: user.id, claimToken: null },
+        })
+        if (claimed.count !== 1) {
+          throw new ValidationError(
+            'This invite link is not valid or has already been used.',
+          )
+        }
+        return member.groupId
       })
-      if (claimed.count !== 1) {
-        throw new ValidationError(
-          'This invite link is not valid or has already been used.',
-        )
+    } catch (err) {
+      // A user racing two different tokens for the same group can slip past the
+      // findFirst check and collide with @@unique([groupId, userId]). Surface
+      // that as a graceful message rather than an unhandled 500.
+      if (
+        err instanceof Prisma.PrismaClientKnownRequestError &&
+        err.code === 'P2002'
+      ) {
+        throw new ValidationError('You are already in this group.')
       }
-      return member.groupId
-    })
+      throw err
+    }
   })
 
   if (result.ok && groupId) {

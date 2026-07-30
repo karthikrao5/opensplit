@@ -42,6 +42,11 @@ describe('upsertUserFromClaims', () => {
     expect(user.displayName).toBe('Member')
   })
 
+  it('uses a placeholder when the email has an empty local part', async () => {
+    const user = await upsertUserFromClaims({ sub: 'auth0|empty', email: '@x.com' })
+    expect(user.displayName).toBe('Member')
+  })
+
   it('treats a different external id as a different user', async () => {
     await upsertUserFromClaims({ sub: 'auth0|a', name: 'A' })
     await upsertUserFromClaims({ sub: 'sms|a', name: 'A' })
