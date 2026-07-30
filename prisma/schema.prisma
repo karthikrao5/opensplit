@@ -1,0 +1,79 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum TransactionKind {
+  EXPENSE
+  SETTLEMENT
+}
+
+model User {
+  id          String   @id @default(uuid())
+  externalId  String   @unique
+  displayName String
+  createdAt   DateTime @default(now())
+
+  memberships GroupMember[]
+}
+
+model Group {
+  id        String   @id @default(uuid())
+  name      String
+  currency  String
+  createdAt DateTime @default(now())
+
+  members      GroupMember[]
+  transactions Transaction[]
+}
+
+model GroupMember {
+  id          String   @id @default(uuid())
+  groupId     String
+  displayName String
+  userId      String?
+  claimToken  String?  @unique
+  createdAt   DateTime @default(now())
+
+  group        Group              @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  user         User?              @relation(fields: [userId], references: [id])
+  paid         Transaction[]      @relation("payer")
+  splits       TransactionSplit[]
+
+  @@unique([groupId, userId])
+  @@index([groupId])
+}
+
+model Transaction {
+  id            String          @id @default(uuid())
+  groupId       String
+  kind          TransactionKind
+  description   String
+  amountMinor   Int
+  payerMemberId String
+  occurredAt    DateTime
+  createdAt     DateTime        @default(now())
+
+  group  Group              @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  payer  GroupMember        @relation("payer", fields: [payerMemberId], references: [id])
+  splits TransactionSplit[]
+
+  @@index([groupId, occurredAt])
+}
+
+model TransactionSplit {
+  id            String @id @default(uuid())
+  transactionId String
+  memberId      String
+  shareMinor    Int
+
+  transaction Transaction @relation(fields: [transactionId], references: [id], onDelete: Cascade)
+  member      GroupMember @relation(fields: [memberId], references: [id])
+
+  @@unique([transactionId, memberId])
+  @@index([transactionId])
+}
