@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { formatMoney, splitEvenly } from '@/lib/money'
+import { formatMoney, parseAmountToMinor, splitEvenly } from '@/lib/money'
 
 const sum = (shares: Map<string, number>) =>
   [...shares.values()].reduce((a, b) => a + b, 0)
@@ -53,5 +53,20 @@ describe('formatMoney', () => {
   it('renders minor units as a currency string', () => {
     expect(formatMoney(4250, 'USD')).toBe('$42.50')
     expect(formatMoney(0, 'USD')).toBe('$0.00')
+  })
+})
+
+describe('parseAmountToMinor', () => {
+  it('parses whole and fractional amounts', () => {
+    expect(parseAmountToMinor('42.50')).toBe(4250)
+    expect(parseAmountToMinor('42')).toBe(4200)
+    expect(parseAmountToMinor('0.07')).toBe(7)
+    expect(parseAmountToMinor(' 12.3 ')).toBe(1230)
+  })
+
+  it('rejects junk, negatives, zero, and extra precision', () => {
+    for (const text of ['', 'abc', '-5', '0', '0.00', '1.234', '1,5', '1.']) {
+      expect(parseAmountToMinor(text)).toBeNull()
+    }
   })
 })

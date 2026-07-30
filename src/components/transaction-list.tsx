@@ -1,0 +1,74 @@
+'use client'
+
+import { useTransition } from 'react'
+import { Button } from '@/components/ui/button'
+import { deleteTransaction } from '@/lib/actions/transactions'
+import { formatMoney } from '@/lib/money'
+
+export type TransactionRow = {
+  id: string
+  kind: 'EXPENSE' | 'SETTLEMENT'
+  description: string
+  amountMinor: number
+  payerName: string
+  recipientName: string | null
+  splitCount: number
+  occurredAt: string
+}
+
+export function TransactionList({
+  groupId,
+  currency,
+  transactions,
+}: {
+  groupId: string
+  currency: string
+  transactions: TransactionRow[]
+}) {
+  const [pending, startTransition] = useTransition()
+
+  if (transactions.length === 0) {
+    return (
+      <p className="text-sm text-muted-foreground">
+        No transactions yet. Add the first one.
+      </p>
+    )
+  }
+
+  return (
+    <ul className="flex flex-col gap-3">
+      {transactions.map((tx) => (
+        <li key={tx.id} className="flex items-start gap-3 text-sm">
+          <span className="w-16 shrink-0 text-muted-foreground">
+            {tx.occurredAt}
+          </span>
+          <div className="flex flex-col">
+            <span className="font-medium">
+              {tx.kind === 'SETTLEMENT'
+                ? `${tx.payerName} paid ${tx.recipientName}`
+                : tx.description}
+            </span>
+            <span className="text-muted-foreground">
+              {tx.kind === 'SETTLEMENT'
+                ? formatMoney(tx.amountMinor, currency)
+                : `${tx.payerName} paid ${formatMoney(tx.amountMinor, currency)} · split ${tx.splitCount} ${tx.splitCount === 1 ? 'way' : 'ways'}`}
+            </span>
+          </div>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="ml-auto text-destructive"
+            disabled={pending}
+            onClick={() =>
+              startTransition(async () => {
+                await deleteTransaction({ groupId, transactionId: tx.id })
+              })
+            }
+          >
+            Delete
+          </Button>
+        </li>
+      ))}
+    </ul>
+  )
+}

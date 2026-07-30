@@ -38,3 +38,17 @@ export function formatMoney(amountMinor: number, currency: string): string {
     currency,
   }).format(amountMinor / 100)
 }
+
+/**
+ * Parses user-typed currency text like "42.50" into 4250 minor units.
+ * Returns null for anything that is not a positive amount with at most two
+ * decimal places.
+ */
+export function parseAmountToMinor(text: string): number | null {
+  const trimmed = text.trim()
+  if (!/^\d+(\.\d{1,2})?$/.test(trimmed)) return null
+
+  const [whole, fraction = ''] = trimmed.split('.')
+  const minor = Number(whole) * 100 + Number(fraction.padEnd(2, '0'))
+  return Number.isSafeInteger(minor) && minor > 0 ? minor : null
+}
