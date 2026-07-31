@@ -1,8 +1,5 @@
-import { AddTransactionDialog } from '@/components/add-transaction-dialog'
-import { BalanceSummary } from '@/components/balance-summary'
-import { MembersSection } from '@/components/members-section'
-import { TransactionList, type TransactionRow } from '@/components/transaction-list'
-import { Separator } from '@/components/ui/separator'
+import { GroupView } from '@/components/group-view'
+import type { TransactionRow } from '@/components/transaction-list'
 import { computeBalances, suggestTransfers } from '@/lib/balances'
 import { prisma } from '@/lib/db'
 import { pageMembership } from '@/lib/membership'
@@ -49,54 +46,29 @@ export default async function GroupPage({
   const baseUrl = process.env.APP_BASE_URL ?? 'http://localhost:3000'
 
   return (
-    <main className="flex flex-col gap-6">
-      <div className="flex items-center justify-between gap-3">
-        <div className="min-w-0">
-          <h1 className="truncate text-2xl font-semibold">{group.name}</h1>
-          <p className="text-sm text-muted-foreground">{group.currency}</p>
-        </div>
-        <AddTransactionDialog
-          groupId={group.id}
-          currency={group.currency}
-          members={members.map((m) => ({ id: m.id, displayName: m.displayName }))}
-          defaultPayerId={you.id}
-        />
-      </div>
-
-      <Separator />
-
-      <BalanceSummary
-        groupId={group.id}
-        currency={group.currency}
-        members={members.map((m) => ({ id: m.id, displayName: m.displayName }))}
-        balances={memberIds.map((memberId) => ({
-          memberId,
-          net: balances.get(memberId) ?? 0,
-        }))}
-        transfers={transfers}
-        yourMemberId={you.id}
-      />
-
-      <Separator />
-
-      <MembersSection
-        groupId={group.id}
-        baseUrl={baseUrl}
-        members={members.map((m) => ({
-          id: m.id,
-          displayName: m.displayName,
-          isYou: m.userId === user.id,
-          claimToken: m.claimToken,
-        }))}
-      />
-
-      <Separator />
-
-      <TransactionList
-        groupId={group.id}
-        currency={group.currency}
-        transactions={rows}
-      />
-    </main>
+    <GroupView
+      groupId={group.id}
+      groupName={group.name}
+      currency={group.currency}
+      memberOptions={members.map((m) => ({
+        id: m.id,
+        displayName: m.displayName,
+      }))}
+      memberRows={members.map((m) => ({
+        id: m.id,
+        displayName: m.displayName,
+        isYou: m.userId === user.id,
+        claimToken: m.claimToken,
+      }))}
+      balances={memberIds.map((memberId) => ({
+        memberId,
+        net: balances.get(memberId) ?? 0,
+      }))}
+      transfers={transfers}
+      yourMemberId={you.id}
+      defaultPayerId={you.id}
+      transactions={rows}
+      baseUrl={baseUrl}
+    />
   )
 }

@@ -92,7 +92,7 @@ export function AddTransactionDialog({
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <Button>Add</Button>
+        <Button>Add transaction</Button>
       </DialogTrigger>
       <DialogContent>
         <DialogHeader>
