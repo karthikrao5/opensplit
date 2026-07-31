@@ -51,6 +51,20 @@ describe('claimMember', () => {
     expect(member.claimToken).toBeNull()
   })
 
+  it('sets a custom, trimmed displayName when one is provided', async () => {
+    const { bob, group } = await seed()
+    mockCurrentUser(bob)
+
+    const result = await claimMember({ token: 'tok-bob', displayName: '  Bobby  ' })
+    expect(result).toMatchObject({ ok: true, groupId: group.id })
+
+    const member = await prisma.groupMember.findFirstOrThrow({
+      where: { userId: bob.id },
+    })
+    expect(member.displayName).toBe('Bobby')
+    expect(member.claimToken).toBeNull()
+  })
+
   it('refuses a token that has already been used', async () => {
     const { bob } = await seed()
     mockCurrentUser(bob)

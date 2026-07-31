@@ -7,7 +7,11 @@ import { z } from 'zod'
 import { requireUser } from '@/lib/auth'
 import { runAction, ValidationError, type ActionResult } from '@/lib/action-result'
 import { prisma } from '@/lib/db'
-import { requireGroupMemberIds, requireMembership } from '@/lib/membership'
+import {
+  NotMemberError,
+  requireGroupMemberIds,
+  requireMembership,
+} from '@/lib/membership'
 
 function newClaimToken(): string {
   return randomBytes(24).toString('base64url')
@@ -95,14 +99,54 @@ export async function removeMember(input: {
   return result
 }
 
-const claimSchema = z.object({ token: z.string().min(1) })
+const renameSchema = z.object({
+  groupId: z.string().uuid(),
+  memberId: z.string().uuid(),
+  displayName: z.string().trim().min(1, 'Name is required').max(80),
+})
+
+/**
+ * Lets the current user rename their OWN member slot in a group. The client
+ * supplies the memberId, but it must match the caller's own member row —
+ * renaming someone else is rejected as a generic NotMemberError.
+ */
+export async function renameMember(input: {
+  groupId: string
+  memberId: string
+  displayName: string
+}): Promise<ActionResult> {
+  const result = await runAction(async () => {
+    const parsed = renameSchema.safeParse(input)
+    if (!parsed.success) {
+      throw new ValidationError(parsed.error.issues[0].message)
+    }
+    const { member } = await requireMembership(parsed.data.groupId)
+    if (parsed.data.memberId !== member.id) throw new NotMemberError()
+
+    await prisma.groupMember.update({
+      where: { id: member.id },
+      data: { displayName: parsed.data.displayName },
+    })
+  })
+
+  if (result.ok) revalidatePath(`/groups/${input.groupId}`)
+  return result
+}
+
+const claimSchema = z.object({
+  token: z.string().min(1),
+  displayName: z.string().trim().min(1, 'Name is required').max(80).optional(),
+})
 
 /**
  * Claims a placeholder member slot for the current user. Cannot use
  * requireMembership — the caller is not a member yet, which is the point.
+ * An optional displayName lets the claimer set how they appear in this group;
+ * when omitted, the placeholder's original name is kept.
  */
 export async function claimMember(input: {
   token: string
+  displayName?: string
 }): Promise<ActionResult & { groupId?: string }> {
   let groupId: string | undefined
 
@@ -138,7 +182,13 @@ export async function claimMember(input: {
 
         const claimed = await tx.groupMember.updateMany({
           where: { id: member.id, claimToken: parsed.data.token },
-          data: { userId: user.id, claimToken: null },
+          data: {
+            userId: user.id,
+            claimToken: null,
+            ...(parsed.data.displayName
+              ? { displayName: parsed.data.displayName }
+              : {}),
+          },
         })
         if (claimed.count !== 1) {
           throw new ValidationError(

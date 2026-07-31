@@ -2,9 +2,21 @@
 
 import { useState, useTransition } from 'react'
 import { Button } from '@/components/ui/button'
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
 import { Separator } from '@/components/ui/separator'
-import { addPlaceholderMember, removeMember } from '@/lib/actions/members'
+import {
+  addPlaceholderMember,
+  removeMember,
+  renameMember,
+} from '@/lib/actions/members'
 
 export type MemberRow = {
   id: string
@@ -27,6 +39,12 @@ export function MembersSection({
   const [copied, setCopied] = useState<string | null>(null)
   const [pending, startTransition] = useTransition()
 
+  // Rename-your-own-slot modal state.
+  const [renameOpen, setRenameOpen] = useState(false)
+  const [renameMemberId, setRenameMemberId] = useState<string | null>(null)
+  const [renameValue, setRenameValue] = useState('')
+  const [renameError, setRenameError] = useState<string | null>(null)
+
   function add() {
     setError(null)
     startTransition(async () => {
@@ -41,6 +59,30 @@ export function MembersSection({
     startTransition(async () => {
       const result = await removeMember({ groupId, memberId })
       if (!result.ok) setError(result.error)
+    })
+  }
+
+  function openRename(member: MemberRow) {
+    setRenameMemberId(member.id)
+    setRenameValue(member.displayName)
+    setRenameError(null)
+    setRenameOpen(true)
+  }
+
+  function saveRename() {
+    if (!renameMemberId) return
+    setRenameError(null)
+    const displayName = renameValue.trim()
+    if (!displayName) return setRenameError('Enter a name')
+
+    startTransition(async () => {
+      const result = await renameMember({
+        groupId,
+        memberId: renameMemberId,
+        displayName,
+      })
+      if (!result.ok) return setRenameError(result.error)
+      setRenameOpen(false)
     })
   }
 
@@ -62,12 +104,18 @@ export function MembersSection({
             key={member.id}
             className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm"
           >
-            <span className="min-w-0 break-words">
-              {member.displayName}
-              {member.isYou && (
+            {member.isYou ? (
+              <button
+                type="button"
+                onClick={() => openRename(member)}
+                className="min-w-0 break-words text-left hover:underline"
+              >
+                {member.displayName}
                 <span className="text-muted-foreground"> (you)</span>
-              )}
-            </span>
+              </button>
+            ) : (
+              <span className="min-w-0 break-words">{member.displayName}</span>
+            )}
             {member.claimToken && (
               <>
                 <span className="text-xs text-muted-foreground">unclaimed</span>
@@ -109,6 +157,34 @@ export function MembersSection({
       </div>
 
       {error && <p className="text-sm text-destructive">{error}</p>}
+
+      <Dialog open={renameOpen} onOpenChange={setRenameOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Change your name</DialogTitle>
+          </DialogHeader>
+          <div className="flex flex-col gap-2">
+            <Label htmlFor="member-name">Your name in this group</Label>
+            <Input
+              id="member-name"
+              value={renameValue}
+              onChange={(e) => setRenameValue(e.target.value)}
+              autoFocus
+            />
+            {renameError && (
+              <p className="text-sm text-destructive">{renameError}</p>
+            )}
+          </div>
+          <DialogFooter>
+            <Button
+              onClick={saveRename}
+              disabled={pending || renameValue.trim() === ''}
+            >
+              {pending ? 'Saving…' : 'Save'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </section>
   )
 }

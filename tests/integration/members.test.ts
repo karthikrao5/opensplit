@@ -1,6 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { prisma } from '@/lib/db'
-import { addPlaceholderMember, removeMember } from '@/lib/actions/members'
+import {
+  addPlaceholderMember,
+  removeMember,
+  renameMember,
+} from '@/lib/actions/members'
 import { mockCurrentUser } from '../helpers/actions'
 import { resetDb } from '../helpers/db'
 
@@ -199,5 +203,75 @@ describe('removeMember', () => {
     })
     expect(result).toEqual({ ok: false, error: 'Not found' })
     expect(await prisma.groupMember.count()).toBe(2)
+  })
+})
+
+describe('renameMember', () => {
+  it('renames the current user\'s own slot (trimmed)', async () => {
+    const { alice, group, aliceMember } = await seedGroup()
+    mockCurrentUser(alice)
+
+    const result = await renameMember({
+      groupId: group.id,
+      memberId: aliceMember.id,
+      displayName: '  Al  ',
+    })
+    expect(result).toEqual({ ok: true })
+    expect(
+      (await prisma.groupMember.findUniqueOrThrow({ where: { id: aliceMember.id } }))
+        .displayName,
+    ).toBe('Al')
+  })
+
+  it('refuses to rename a different member and leaves it unchanged', async () => {
+    const { alice, group, aliceMember } = await seedGroup()
+    mockCurrentUser(alice)
+    await addPlaceholderMember({ groupId: group.id, displayName: 'Bob' })
+    const bob = await prisma.groupMember.findFirstOrThrow({
+      where: { displayName: 'Bob' },
+    })
+
+    const result = await renameMember({
+      groupId: group.id,
+      memberId: bob.id,
+      displayName: 'Hacked',
+    })
+    expect(result).toEqual({ ok: false, error: 'Not found' })
+    expect(
+      (await prisma.groupMember.findUniqueOrThrow({ where: { id: bob.id } }))
+        .displayName,
+    ).toBe('Bob')
+    // Alice's own slot is untouched too.
+    expect(
+      (await prisma.groupMember.findUniqueOrThrow({ where: { id: aliceMember.id } }))
+        .displayName,
+    ).toBe('Alice')
+  })
+
+  it('rejects a blank name', async () => {
+    const { alice, group, aliceMember } = await seedGroup()
+    mockCurrentUser(alice)
+
+    const result = await renameMember({
+      groupId: group.id,
+      memberId: aliceMember.id,
+      displayName: '   ',
+    })
+    expect(result).toMatchObject({ ok: false })
+  })
+
+  it('refuses a non-member', async () => {
+    const { group, aliceMember } = await seedGroup()
+    const mallory = await prisma.user.create({
+      data: { externalId: 'auth0|mallory', displayName: 'Mallory' },
+    })
+    mockCurrentUser(mallory)
+
+    const result = await renameMember({
+      groupId: group.id,
+      memberId: aliceMember.id,
+      displayName: 'X',
+    })
+    expect(result).toEqual({ ok: false, error: 'Not found' })
   })
 })
