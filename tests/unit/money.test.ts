@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest'
-import { formatMoney, parseAmountToMinor, splitEvenly } from '@/lib/money'
+import {
+  formatMoney,
+  parseAmountToMinor,
+  splitByPercentages,
+  splitEvenly,
+} from '@/lib/money'
 
 const sum = (shares: Map<string, number>) =>
   [...shares.values()].reduce((a, b) => a + b, 0)
@@ -46,6 +51,123 @@ describe('splitEvenly', () => {
     expect(() => splitEvenly(0, ['a'])).toThrow(/positive integer/)
     expect(() => splitEvenly(-5, ['a'])).toThrow(/positive integer/)
     expect(() => splitEvenly(1.5, ['a'])).toThrow(/positive integer/)
+  })
+})
+
+describe('splitByPercentages', () => {
+  it('divides proportionally when it comes out even', () => {
+    const shares = splitByPercentages(1000, [
+      { memberId: 'a', percent: 50 },
+      { memberId: 'b', percent: 30 },
+      { memberId: 'c', percent: 20 },
+    ])
+    expect(shares.get('a')).toBe(500)
+    expect(shares.get('b')).toBe(300)
+    expect(shares.get('c')).toBe(200)
+  })
+
+  it('gives the leftover unit to the largest remainder, deterministically', () => {
+    // 10¢ at 34/33/33: bases 3/3/3 = 9, leftover 1 → highest remainder (a, .40)
+    const shares = splitByPercentages(10, [
+      { memberId: 'a', percent: 34 },
+      { memberId: 'b', percent: 33 },
+      { memberId: 'c', percent: 33 },
+    ])
+    expect(shares.get('a')).toBe(4)
+    expect(shares.get('b')).toBe(3)
+    expect(shares.get('c')).toBe(3)
+  })
+
+  it('always sums to the exact amount', () => {
+    const partitions = [
+      [100],
+      [50, 50],
+      [34, 33, 33],
+      [60, 40],
+      [10, 20, 30, 40],
+    ]
+    for (const amount of [1, 2, 7, 10, 99, 100, 101, 12345, 1_000_000_000]) {
+      for (const partition of partitions) {
+        const entries = partition.map((percent, i) => ({
+          memberId: `m${i}`,
+          percent,
+        }))
+        expect(sum(splitByPercentages(amount, entries))).toBe(amount)
+      }
+    }
+  })
+
+  it('gives a zero share when a percent is too small for the amount', () => {
+    const shares = splitByPercentages(1, [
+      { memberId: 'a', percent: 50 },
+      { memberId: 'b', percent: 50 },
+    ])
+    expect(sum(shares)).toBe(1)
+    expect([...shares.values()].filter((v) => v === 0)).toHaveLength(1)
+  })
+
+  it('is deterministic regardless of entry ordering', () => {
+    const forward = splitByPercentages(10, [
+      { memberId: 'a', percent: 34 },
+      { memberId: 'b', percent: 33 },
+      { memberId: 'c', percent: 33 },
+    ])
+    const reversed = splitByPercentages(10, [
+      { memberId: 'c', percent: 33 },
+      { memberId: 'b', percent: 33 },
+      { memberId: 'a', percent: 34 },
+    ])
+    expect([...reversed.entries()].sort()).toEqual([...forward.entries()].sort())
+  })
+
+  it('rejects an empty member list', () => {
+    expect(() => splitByPercentages(100, [])).toThrow(/at least one member/)
+  })
+
+  it('rejects a non-positive or non-integer amount', () => {
+    const entries = [{ memberId: 'a', percent: 100 }]
+    expect(() => splitByPercentages(0, entries)).toThrow(/positive integer/)
+    expect(() => splitByPercentages(-5, entries)).toThrow(/positive integer/)
+    expect(() => splitByPercentages(1.5, entries)).toThrow(/positive integer/)
+  })
+
+  it('rejects a non-integer, negative, or out-of-range percent', () => {
+    expect(() =>
+      splitByPercentages(100, [
+        { memberId: 'a', percent: 33.5 },
+        { memberId: 'b', percent: 66.5 },
+      ]),
+    ).toThrow(/whole number between 0 and 100/)
+    expect(() =>
+      splitByPercentages(100, [
+        { memberId: 'a', percent: -10 },
+        { memberId: 'b', percent: 110 },
+      ]),
+    ).toThrow(/whole number between 0 and 100/)
+  })
+
+  it('rejects percentages that do not sum to 100', () => {
+    expect(() =>
+      splitByPercentages(100, [
+        { memberId: 'a', percent: 50 },
+        { memberId: 'b', percent: 49 },
+      ]),
+    ).toThrow(/sum to 100/)
+    expect(() =>
+      splitByPercentages(100, [
+        { memberId: 'a', percent: 50 },
+        { memberId: 'b', percent: 51 },
+      ]),
+    ).toThrow(/sum to 100/)
+  })
+
+  it('rejects duplicate member ids', () => {
+    expect(() =>
+      splitByPercentages(100, [
+        { memberId: 'a', percent: 50 },
+        { memberId: 'a', percent: 50 },
+      ]),
+    ).toThrow(/unique member ids/)
   })
 })
 

@@ -16,6 +16,8 @@ export type TransactionRow = {
   amountMinor: number
   payerMemberId: string
   includedMemberIds: string[]
+  splitType: 'EVEN' | 'PERCENTAGE'
+  percentages: { memberId: string; percent: number }[]
   payerName: string
   recipientName: string | null
   splitCount: number
@@ -66,7 +68,9 @@ export function TransactionList({
                   {tx.description}
                 </span>
                 <span className="text-muted-foreground">
-                  {`${tx.payerName} paid ${formatMoney(tx.amountMinor, currency)} · split ${tx.splitCount} ${tx.splitCount === 1 ? 'way' : 'ways'}`}
+                  {tx.splitType === 'PERCENTAGE'
+                    ? `${tx.payerName} paid ${formatMoney(tx.amountMinor, currency)} · split by %`
+                    : `${tx.payerName} paid ${formatMoney(tx.amountMinor, currency)} · split ${tx.splitCount} ${tx.splitCount === 1 ? 'way' : 'ways'}`}
                 </span>
               </button>
             ) : (
@@ -115,6 +119,8 @@ export function TransactionList({
             payerMemberId: editingTx.payerMemberId,
             includedMemberIds: editingTx.includedMemberIds,
             occurredAt: editingTx.occurredAt,
+            splitType: editingTx.splitType,
+            percentages: editingTx.percentages,
           }}
           onClose={() => setEditingTx(null)}
         />

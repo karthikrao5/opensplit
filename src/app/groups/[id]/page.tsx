@@ -36,6 +36,10 @@ export default async function GroupPage({
     amountMinor: tx.amountMinor,
     payerMemberId: tx.payerMemberId,
     includedMemberIds: tx.splits.map((s) => s.memberId),
+    splitType: tx.splitType,
+    percentages: tx.splits
+      .filter((s) => s.percent !== null)
+      .map((s) => ({ memberId: s.memberId, percent: s.percent as number })),
     payerName: nameOf(tx.payerMemberId),
     recipientName:
       tx.kind === 'SETTLEMENT' && tx.splits[0]

@@ -32,6 +32,65 @@ export function splitEvenly(
   return shares
 }
 
+/**
+ * Divides amountMinor across members by whole-number percentages that sum to
+ * 100. Each member gets floor(amountMinor * percent / 100); the leftover minor
+ * units go to the members with the largest fractional remainders (ties broken
+ * by id order), so the shares always sum to exactly amountMinor.
+ */
+export function splitByPercentages(
+  amountMinor: number,
+  entries: { memberId: string; percent: number }[],
+): Map<string, number> {
+  if (entries.length === 0) {
+    throw new Error('splitByPercentages requires at least one member')
+  }
+  if (!Number.isInteger(amountMinor) || amountMinor <= 0) {
+    throw new Error(
+      'splitByPercentages requires amountMinor to be a positive integer',
+    )
+  }
+  const ids = entries.map((e) => e.memberId)
+  if (new Set(ids).size !== ids.length) {
+    throw new Error('splitByPercentages requires unique member ids')
+  }
+  for (const { percent } of entries) {
+    if (!Number.isInteger(percent) || percent < 0 || percent > 100) {
+      throw new Error(
+        'splitByPercentages requires each percent to be a whole number between 0 and 100',
+      )
+    }
+  }
+  if (entries.reduce((total, e) => total + e.percent, 0) !== 100) {
+    throw new Error('splitByPercentages requires the percentages to sum to 100')
+  }
+
+  // Sort by id first so the later stable sort by remainder tie-breaks
+  // deterministically in id order, matching splitEvenly's determinism.
+  const ordered = [...entries].sort((a, b) =>
+    a.memberId.localeCompare(b.memberId),
+  )
+
+  const shares = new Map<string, number>()
+  const remainders: { memberId: string; rem: number }[] = []
+  let allocated = 0
+  for (const { memberId, percent } of ordered) {
+    const numerator = amountMinor * percent
+    const base = Math.floor(numerator / 100)
+    shares.set(memberId, base)
+    allocated += base
+    remainders.push({ memberId, rem: numerator % 100 })
+  }
+
+  let leftover = amountMinor - allocated
+  for (const { memberId } of [...remainders].sort((a, b) => b.rem - a.rem)) {
+    if (leftover <= 0) break
+    shares.set(memberId, (shares.get(memberId) ?? 0) + 1)
+    leftover -= 1
+  }
+  return shares
+}
+
 export function formatMoney(amountMinor: number, currency: string): string {
   return new Intl.NumberFormat('en-US', {
     style: 'currency',
