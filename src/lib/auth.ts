@@ -1,3 +1,4 @@
+import { headers } from 'next/headers'
 import { redirect } from 'next/navigation'
 import type { User } from '@prisma/client'
 import { auth0 } from '@/lib/auth0'
@@ -35,6 +36,18 @@ export async function getCurrentUser(): Promise<User | null> {
 
 export async function requireUser(): Promise<User> {
   const user = await getCurrentUser()
-  if (!user) redirect('/auth/login')
+  if (!user) redirect(await loginUrl())
   return user
+}
+
+/**
+ * Builds the Auth0 login URL, preserving where the user was headed via
+ * `returnTo` so they land back there after authenticating (essential for deep
+ * links like `/claim/<token>`). The current path is read from the `x-pathname`
+ * header that `proxy.ts` forwards, since a Server Component cannot otherwise
+ * see its own URL. The Auth0 SDK sanitizes `returnTo` against open redirects.
+ */
+async function loginUrl(): Promise<string> {
+  const path = (await headers()).get('x-pathname')
+  return path ? `/auth/login?returnTo=${encodeURIComponent(path)}` : '/auth/login'
 }
