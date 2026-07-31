@@ -5,8 +5,9 @@ export async function proxy(request: NextRequest) {
   const authRes = await auth0.middleware(request)
 
   // Auth0 owns the /auth/* routes (login, callback, logout) and short-circuits
-  // them with its own responses — never rewrite those.
-  if (request.nextUrl.pathname.startsWith('/auth')) {
+  // them with its own responses — never rewrite those. Match the trailing slash
+  // so app routes like /authors aren't mistaken for the Auth0 mount.
+  if (request.nextUrl.pathname.startsWith('/auth/')) {
     return authRes
   }
 
@@ -29,8 +30,15 @@ export async function proxy(request: NextRequest) {
 
   // Preserve everything Auth0 set on its response — notably the rolling-session
   // Set-Cookie headers, copied losslessly with all their attributes intact.
+  // Skip `set-cookie` (re-emitted below via getSetCookie so attributes survive)
+  // and any `x-middleware-*` headers, which NextResponse.next wrote onto `res`
+  // to carry the x-pathname request override — copying them from authRes would
+  // clobber that. (Auth0's non-auth response carries none today; this guards a
+  // future SDK change.)
   authRes.headers.forEach((value, key) => {
-    if (key.toLowerCase() !== 'set-cookie') res.headers.set(key, value)
+    const lower = key.toLowerCase()
+    if (lower === 'set-cookie' || lower.startsWith('x-middleware-')) return
+    res.headers.set(key, value)
   })
   for (const cookie of authRes.headers.getSetCookie()) {
     res.headers.append('set-cookie', cookie)

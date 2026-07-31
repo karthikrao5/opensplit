@@ -38,6 +38,6 @@ describe('requireUser returnTo', () => {
     getSession.mockResolvedValue(null)
     pathHeader = null
 
-    await expect(requireUser()).rejects.toThrow('REDIRECT:/auth/login')
+    await expect(requireUser()).rejects.toThrow(/^REDIRECT:\/auth\/login$/)
   })
 })
