@@ -3,9 +3,9 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
-  directUrl = env("POSTGRES_URL_NON_POOLING")        # Direct database URL (port 5432)
+  provider  = "postgresql"
+  url       = env("POSTGRES_PRISMA_URL")
+  directUrl = env("POSTGRES_URL_NON_POOLING")
 }
 
 enum TransactionKind {
@@ -40,10 +40,10 @@ model GroupMember {
   claimToken  String?  @unique
   createdAt   DateTime @default(now())
 
-  group        Group              @relation(fields: [groupId], references: [id], onDelete: Cascade)
-  user         User?              @relation(fields: [userId], references: [id])
-  paid         Transaction[]      @relation("payer")
-  splits       TransactionSplit[]
+  group  Group              @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  user   User?              @relation(fields: [userId], references: [id])
+  paid   Transaction[]      @relation("payer")
+  splits TransactionSplit[]
 
   @@unique([groupId, userId])
   @@index([groupId])
