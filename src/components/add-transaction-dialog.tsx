@@ -20,30 +20,52 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import { addTransaction } from '@/lib/actions/transactions'
+import { addTransaction, updateTransaction } from '@/lib/actions/transactions'
 import { formatMoney, parseAmountToMinor, splitEvenly } from '@/lib/money'
 
 export type MemberOption = { id: string; displayName: string }
+
+/** An existing expense to edit. When present, the dialog runs in edit mode. */
+export type EditingTransaction = {
+  transactionId: string
+  description: string
+  amountMinor: number
+  payerMemberId: string
+  includedMemberIds: string[]
+  occurredAt: string // YYYY-MM-DD
+}
 
 export function AddTransactionDialog({
   groupId,
   currency,
   members,
   defaultPayerId,
+  editing,
+  onClose,
 }: {
   groupId: string
   currency: string
   members: MemberOption[]
   defaultPayerId: string
+  // Edit mode: the parent mounts this dialog (already open) with the expense to
+  // edit and unmounts it via onClose. Omit both for the default add mode.
+  editing?: EditingTransaction
+  onClose?: () => void
 }) {
   const [open, setOpen] = useState(false)
-  const [amountText, setAmountText] = useState('')
-  const [description, setDescription] = useState('')
-  const [occurredAt, setOccurredAt] = useState(
-    new Date().toISOString().slice(0, 10),
+  const [amountText, setAmountText] = useState(
+    editing ? (editing.amountMinor / 100).toFixed(2) : '',
   )
-  const [payerMemberId, setPayerMemberId] = useState(defaultPayerId)
-  const [included, setIncluded] = useState<string[]>(members.map((m) => m.id))
+  const [description, setDescription] = useState(editing?.description ?? '')
+  const [occurredAt, setOccurredAt] = useState(
+    editing?.occurredAt ?? new Date().toISOString().slice(0, 10),
+  )
+  const [payerMemberId, setPayerMemberId] = useState(
+    editing?.payerMemberId ?? defaultPayerId,
+  )
+  const [included, setIncluded] = useState<string[]>(
+    editing?.includedMemberIds ?? members.map((m) => m.id),
+  )
   const [error, setError] = useState<string | null>(null)
   const [pending, startTransition] = useTransition()
 
@@ -72,16 +94,28 @@ export function AddTransactionDialog({
     setError(null)
     if (!amountMinor) return setError('Enter an amount like 42.50')
 
+    const payload = {
+      groupId,
+      description,
+      amountMinor,
+      payerMemberId,
+      includedMemberIds: included,
+      occurredAt,
+    }
+
     startTransition(async () => {
-      const result = await addTransaction({
-        groupId,
-        description,
-        amountMinor,
-        payerMemberId,
-        includedMemberIds: included,
-        occurredAt,
-      })
+      const result = editing
+        ? await updateTransaction({
+            transactionId: editing.transactionId,
+            ...payload,
+          })
+        : await addTransaction(payload)
       if (!result.ok) return setError(result.error)
+
+      if (editing) {
+        onClose?.() // parent unmounts this instance; no field resets needed
+        return
+      }
       setOpen(false)
       setAmountText('')
       setDescription('')
@@ -90,13 +124,18 @@ export function AddTransactionDialog({
   }
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>
-        <Button>Add transaction</Button>
-      </DialogTrigger>
+    <Dialog
+      open={editing ? true : open}
+      onOpenChange={editing ? (next) => !next && onClose?.() : setOpen}
+    >
+      {!editing && (
+        <DialogTrigger asChild>
+          <Button>Add transaction</Button>
+        </DialogTrigger>
+      )}
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>Add an expense</DialogTitle>
+          <DialogTitle>{editing ? 'Edit expense' : 'Add an expense'}</DialogTitle>
         </DialogHeader>
 
         <div className="flex flex-col gap-4">

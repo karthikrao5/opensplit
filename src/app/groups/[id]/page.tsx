@@ -34,6 +34,8 @@ export default async function GroupPage({
     kind: tx.kind,
     description: tx.description,
     amountMinor: tx.amountMinor,
+    payerMemberId: tx.payerMemberId,
+    includedMemberIds: tx.splits.map((s) => s.memberId),
     payerName: nameOf(tx.payerMemberId),
     recipientName:
       tx.kind === 'SETTLEMENT' && tx.splits[0]

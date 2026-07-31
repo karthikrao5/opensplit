@@ -68,6 +68,8 @@ export function GroupView({
           <TransactionList
             groupId={groupId}
             currency={currency}
+            members={memberOptions}
+            defaultPayerId={defaultPayerId}
             transactions={transactions}
           />
           <div className="flex justify-center pt-2">
