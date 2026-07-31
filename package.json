@@ -8,6 +8,7 @@
     "start": "next start",
     "lint": "eslint",
     "test": "vitest run --config vitest.config.ts",
+    "vercel-build": "prisma generate && prisma migrate deploy && next build",
     "test:watch": "vitest --config vitest.config.ts",
     "db:migrate": "prisma migrate dev",
     "db:reset:test": "dotenv -e .env.test -- prisma migrate reset --force",
