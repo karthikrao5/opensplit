@@ -48,15 +48,18 @@ export default async function GroupsPage() {
             <li key={group.id}>
               <Link href={`/groups/${group.id}`}>
                 <Card className="transition-colors hover:bg-accent">
-                  <CardContent className="flex items-center justify-between p-4">
-                    <span className="font-medium">{group.name}</span>
+                  <CardContent className="flex items-center justify-between gap-3 p-4">
+                    <span className="min-w-0 truncate font-medium">
+                      {group.name}
+                    </span>
                     <span
                       className={
-                        net > 0
+                        'shrink-0 text-right ' +
+                        (net > 0
                           ? 'text-emerald-600'
                           : net < 0
                             ? 'text-destructive'
-                            : 'text-muted-foreground'
+                            : 'text-muted-foreground')
                       }
                     >
                       {net === 0

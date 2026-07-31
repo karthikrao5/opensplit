@@ -45,8 +45,8 @@ export function TransactionList({
             <span className="w-16 shrink-0 text-muted-foreground">
               {tx.occurredAt}
             </span>
-            <div className="flex flex-col">
-              <span className="font-medium">
+            <div className="flex min-w-0 flex-col">
+              <span className="font-medium break-words">
                 {tx.kind === 'SETTLEMENT'
                   ? `${tx.payerName} paid ${tx.recipientName}`
                   : tx.description}
@@ -60,7 +60,7 @@ export function TransactionList({
             <Button
               variant="ghost"
               size="sm"
-              className="ml-auto text-destructive"
+              className="ml-auto shrink-0 text-destructive"
               disabled={pending}
               onClick={() =>
                 startTransition(async () => {

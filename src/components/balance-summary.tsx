@@ -66,8 +66,11 @@ export function BalanceSummary({
         ) : (
           <ul className="flex flex-col gap-2">
             {transfers.map((t, i) => (
-              <li key={i} className="flex items-center gap-3 text-sm">
-                <span>
+              <li
+                key={i}
+                className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm"
+              >
+                <span className="min-w-0 break-words">
                   {nameOf(t.fromMemberId)} → {nameOf(t.toMemberId)}
                 </span>
                 <span className="font-medium">
@@ -76,7 +79,7 @@ export function BalanceSummary({
                 <Button
                   variant="outline"
                   size="sm"
-                  className="ml-auto"
+                  className="ml-auto shrink-0"
                   onClick={() => {
                     setPrefill(t)
                     setOpen(true)

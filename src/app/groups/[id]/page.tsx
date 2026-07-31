@@ -50,9 +50,9 @@ export default async function GroupPage({
 
   return (
     <main className="flex flex-col gap-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-semibold">{group.name}</h1>
+      <div className="flex items-center justify-between gap-3">
+        <div className="min-w-0">
+          <h1 className="truncate text-2xl font-semibold">{group.name}</h1>
           <p className="text-sm text-muted-foreground">{group.currency}</p>
         </div>
         <AddTransactionDialog

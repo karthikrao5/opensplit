@@ -58,8 +58,11 @@ export function MembersSection({
 
       <ul className="flex flex-col gap-2">
         {members.map((member) => (
-          <li key={member.id} className="flex items-center gap-2 text-sm">
-            <span>
+          <li
+            key={member.id}
+            className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm"
+          >
+            <span className="min-w-0 break-words">
               {member.displayName}
               {member.isYou && (
                 <span className="text-muted-foreground"> (you)</span>
@@ -71,6 +74,7 @@ export function MembersSection({
                 <Button
                   variant="ghost"
                   size="sm"
+                  className="shrink-0"
                   onClick={() => copyClaimLink(member.claimToken!)}
                 >
                   {copied === member.claimToken ? 'Copied' : 'Copy invite link'}
@@ -80,7 +84,7 @@ export function MembersSection({
             <Button
               variant="ghost"
               size="sm"
-              className="ml-auto text-destructive"
+              className="ml-auto shrink-0 text-destructive"
               disabled={pending}
               onClick={() => remove(member.id)}
             >
