@@ -16,7 +16,9 @@ export default async function GroupTransactionsPage({
   const nameOf = (memberId: string) =>
     members.find((m) => m.id === memberId)?.displayName ?? 'Unknown'
 
-  const rows: TransactionRow[] = transactions.map((tx) => ({
+  const rows: TransactionRow[] = transactions
+    .filter((tx) => tx.kind === 'EXPENSE')
+    .map((tx) => ({
     id: tx.id,
     kind: tx.kind,
     description: tx.description,
