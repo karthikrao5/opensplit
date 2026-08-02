@@ -40,14 +40,21 @@ export function BalanceSummary({
             : `You owe ${formatMoney(-yours, currency)}`}
       </p>
 
-      <ul className="flex flex-wrap gap-x-6 gap-y-1 text-sm">
+      <ul className="flex flex-col gap-1 text-sm">
         {balances.map(({ memberId, net }) => (
-          <li key={memberId}>
-            <span className="text-muted-foreground">{nameOf(memberId)} </span>
+          <li
+            key={memberId}
+            className="flex items-center justify-between gap-4"
+          >
+            <span className="min-w-0 truncate">{nameOf(memberId)}</span>
             <span
-              className={
-                net > 0 ? 'text-emerald-600' : net < 0 ? 'text-destructive' : ''
-              }
+              className={`shrink-0 tabular-nums ${
+                net > 0
+                  ? 'text-emerald-600'
+                  : net < 0
+                    ? 'text-destructive'
+                    : 'text-muted-foreground'
+              }`}
             >
               {net === 0
                 ? '—'
