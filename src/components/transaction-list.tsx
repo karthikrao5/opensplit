@@ -1,6 +1,6 @@
 'use client'
 
-import { ArrowLeftRightIcon, ReceiptIcon } from 'lucide-react'
+import { ArrowLeftRightIcon, ReceiptIcon, Trash2Icon } from 'lucide-react'
 import { useEffect, useState, useTransition } from 'react'
 import {
   AddTransactionDialog,
@@ -118,7 +118,7 @@ export function TransactionList({
           {visible.map((tx) => (
           <li
             key={tx.id}
-            className={`flex items-start gap-3 rounded-lg border p-3 text-sm${
+            className={`flex items-center gap-3 rounded-lg border p-3 text-sm${
               tx.kind === 'EXPENSE'
                 ? ' cursor-pointer transition-colors hover:bg-accent'
                 : ''
@@ -139,54 +139,56 @@ export function TransactionList({
                 : undefined
             }
           >
-            <div className="flex shrink-0 items-center gap-3 self-center">
-              {tx.kind === 'SETTLEMENT' ? (
-                <ArrowLeftRightIcon
-                  className="size-4 shrink-0 text-muted-foreground"
-                  aria-label="Settlement"
-                />
-              ) : (
-                <ReceiptIcon
-                  className="size-4 shrink-0 text-muted-foreground"
-                  aria-label="Expense"
-                />
-              )}
+            {tx.kind === 'SETTLEMENT' ? (
+              <ArrowLeftRightIcon
+                className="size-4 shrink-0 text-muted-foreground"
+                aria-label="Settlement"
+              />
+            ) : (
+              <ReceiptIcon
+                className="size-4 shrink-0 text-muted-foreground"
+                aria-label="Expense"
+              />
+            )}
+
+            <div className="flex min-w-0 flex-1 flex-col">
+              <span className="truncate font-medium">
+                {tx.kind === 'SETTLEMENT'
+                  ? `${tx.payerName} paid ${tx.recipientName}`
+                  : tx.description}
+              </span>
               <span
-                className="w-24 text-xs text-muted-foreground"
+                className="text-xs text-muted-foreground"
                 suppressHydrationWarning
               >
                 {formatOccurredAt(tx.occurredAt, mounted)}
               </span>
             </div>
-            {tx.kind === 'EXPENSE' ? (
-              <div className="flex min-w-0 flex-1 flex-col">
-                <span className="font-medium break-words">
-                  {tx.description}
-                </span>
-                <span className="text-muted-foreground">
-                  {`${tx.payerName} paid ${formatMoney(tx.amountMinor, currency)} · ${
-                    tx.splitType === 'PERCENTAGE'
-                      ? 'split by %'
-                      : tx.splitType === 'EXACT'
-                        ? 'split by amount'
-                        : `split ${tx.splitCount} ${tx.splitCount === 1 ? 'way' : 'ways'}`
-                  }`}
-                </span>
-              </div>
+
+            {tx.kind === 'SETTLEMENT' ? (
+              <span className="min-w-0 text-right text-xs text-muted-foreground">
+                {formatMoney(tx.amountMinor, currency)}
+              </span>
             ) : (
-              <div className="flex min-w-0 flex-1 flex-col">
-                <span className="font-medium break-words">
-                  {`${tx.payerName} paid ${tx.recipientName}`}
+              <div className="flex min-w-0 flex-col text-right text-xs text-muted-foreground">
+                <span>
+                  {`${tx.payerName} paid ${formatMoney(tx.amountMinor, currency)}`}
                 </span>
-                <span className="text-muted-foreground">
-                  {formatMoney(tx.amountMinor, currency)}
+                <span>
+                  {tx.splitType === 'PERCENTAGE'
+                    ? 'split by %'
+                    : tx.splitType === 'EXACT'
+                      ? 'split by amount'
+                      : `split ${tx.splitCount} ${tx.splitCount === 1 ? 'way' : 'ways'}`}
                 </span>
               </div>
             )}
+
             <Button
               variant="ghost"
-              size="sm"
-              className="ml-auto shrink-0 self-center text-destructive"
+              size="icon-sm"
+              className="shrink-0 text-destructive"
+              aria-label="Delete transaction"
               disabled={pending}
               onClick={(e) => {
                 e.stopPropagation()
@@ -194,7 +196,7 @@ export function TransactionList({
                 setDeletingTx(tx)
               }}
             >
-              Delete
+              <Trash2Icon />
             </Button>
             </li>
           ))}
