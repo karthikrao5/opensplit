@@ -1,7 +1,7 @@
 import { ArrowLeftIcon } from 'lucide-react'
 import Link from 'next/link'
-import { AddTransactionDialog } from '@/components/add-transaction-dialog'
 import { GroupNav } from '@/components/group-nav'
+import { HeaderAddTransaction } from '@/components/header-add-transaction'
 import { Button } from '@/components/ui/button'
 import { loadGroup } from './load-group'
 
@@ -30,7 +30,7 @@ export default async function GroupLayout({
             <p className="text-sm text-muted-foreground">{group.currency}</p>
           </div>
         </div>
-        <AddTransactionDialog
+        <HeaderAddTransaction
           groupId={group.id}
           currency={group.currency}
           members={members.map((m) => ({

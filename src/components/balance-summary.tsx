@@ -98,17 +98,6 @@ export function BalanceSummary({
             ))}
           </ul>
         )}
-        <Button
-          variant="ghost"
-          size="sm"
-          className="self-start"
-          onClick={() => {
-            setPrefill(null)
-            setOpen(true)
-          }}
-        >
-          Record another payment
-        </Button>
       </div>
 
       {open && (
