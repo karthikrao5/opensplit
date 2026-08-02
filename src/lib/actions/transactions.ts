@@ -9,7 +9,12 @@ import {
   requireGroupMemberIds,
   requireMembership,
 } from '@/lib/membership'
-import { MAX_AMOUNT_MINOR, splitByPercentages, splitEvenly } from '@/lib/money'
+import {
+  MAX_AMOUNT_MINOR,
+  splitByAmounts,
+  splitByPercentages,
+  splitEvenly,
+} from '@/lib/money'
 
 const amountSchema = z
   .number()
@@ -24,20 +29,31 @@ const percentageEntrySchema = z.object({
   percent: z.number().int('Percent must be a whole number').min(0).max(100),
 })
 
+const exactEntrySchema = z.object({
+  memberId: z.string().uuid(),
+  shareMinor: z
+    .number()
+    .int('Amount must be a whole number of cents')
+    .min(0)
+    .max(MAX_AMOUNT_MINOR),
+})
+
 const baseExpenseFields = z.object({
   groupId: z.string().uuid(),
   description: z.string().trim().min(1, 'Description is required').max(140),
   amountMinor: amountSchema,
   payerMemberId: z.string().uuid(),
   occurredAt: dateSchema,
-  splitType: z.enum(['EVEN', 'PERCENTAGE']).default('EVEN'),
+  splitType: z.enum(['EVEN', 'PERCENTAGE', 'EXACT']).default('EVEN'),
   includedMemberIds: z.array(z.string().uuid()).optional(),
   percentages: z.array(percentageEntrySchema).optional(),
+  amounts: z.array(exactEntrySchema).optional(),
 })
 
 /**
  * Validates the split-style-specific fields: EVEN needs a non-empty member
- * list; PERCENTAGE needs percentages with unique members that sum to 100.
+ * list; PERCENTAGE needs percentages with unique members that sum to 100;
+ * EXACT needs amounts with unique members that sum to the total.
  */
 function refineSplit(
   data: z.infer<typeof baseExpenseFields>,
@@ -53,28 +69,56 @@ function refineSplit(
     }
     return
   }
-  const percentages = data.percentages ?? []
-  if (percentages.length === 0) {
+  if (data.splitType === 'PERCENTAGE') {
+    const percentages = data.percentages ?? []
+    if (percentages.length === 0) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['percentages'],
+        message: 'Include at least one person in the split',
+      })
+      return
+    }
+    const ids = percentages.map((p) => p.memberId)
+    if (new Set(ids).size !== ids.length) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['percentages'],
+        message: 'Each person can only appear once',
+      })
+    }
+    if (percentages.reduce((total, p) => total + p.percent, 0) !== 100) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['percentages'],
+        message: 'Percentages must add up to 100',
+      })
+    }
+    return
+  }
+  // EXACT
+  const amounts = data.amounts ?? []
+  if (amounts.length === 0) {
     ctx.addIssue({
       code: 'custom',
-      path: ['percentages'],
+      path: ['amounts'],
       message: 'Include at least one person in the split',
     })
     return
   }
-  const ids = percentages.map((p) => p.memberId)
+  const ids = amounts.map((a) => a.memberId)
   if (new Set(ids).size !== ids.length) {
     ctx.addIssue({
       code: 'custom',
-      path: ['percentages'],
+      path: ['amounts'],
       message: 'Each person can only appear once',
     })
   }
-  if (percentages.reduce((total, p) => total + p.percent, 0) !== 100) {
+  if (amounts.reduce((total, a) => total + a.shareMinor, 0) !== data.amountMinor) {
     ctx.addIssue({
       code: 'custom',
-      path: ['percentages'],
-      message: 'Percentages must add up to 100',
+      path: ['amounts'],
+      message: 'Amounts must add up to the total',
     })
   }
 }
@@ -87,6 +131,10 @@ type SplitSpec =
       splitType: 'PERCENTAGE'
       percentages: { memberId: string; percent: number }[]
     }
+  | {
+      splitType: 'EXACT'
+      amounts: { memberId: string; shareMinor: number }[]
+    }
 
 // Loose input shape mirroring the schema (splitType defaults to EVEN; the
 // split fields are optional and cross-validated at runtime by refineSplit).
@@ -96,16 +144,21 @@ type ExpenseInput = {
   amountMinor: number
   payerMemberId: string
   occurredAt: string
-  splitType?: 'EVEN' | 'PERCENTAGE'
+  splitType?: 'EVEN' | 'PERCENTAGE' | 'EXACT'
   includedMemberIds?: string[]
   percentages?: { memberId: string; percent: number }[]
+  amounts?: { memberId: string; shareMinor: number }[]
 }
 
 /** Narrows validated schema output to the SplitSpec buildSplits consumes. */
 function toSplitSpec(data: z.infer<typeof baseExpenseFields>): SplitSpec {
-  return data.splitType === 'PERCENTAGE'
-    ? { splitType: 'PERCENTAGE', percentages: data.percentages ?? [] }
-    : { splitType: 'EVEN', includedMemberIds: data.includedMemberIds ?? [] }
+  if (data.splitType === 'PERCENTAGE') {
+    return { splitType: 'PERCENTAGE', percentages: data.percentages ?? [] }
+  }
+  if (data.splitType === 'EXACT') {
+    return { splitType: 'EXACT', amounts: data.amounts ?? [] }
+  }
+  return { splitType: 'EVEN', includedMemberIds: data.includedMemberIds ?? [] }
 }
 
 function parseOrThrow<T extends z.ZodTypeAny>(schema: T, input: unknown): z.infer<T> {
@@ -132,18 +185,33 @@ async function buildSplits(
     }))
   }
 
-  // A member left at 0% is simply excluded (no split row for them).
-  const entries = spec.percentages.filter((p) => p.percent > 0)
+  if (spec.splitType === 'PERCENTAGE') {
+    // A member left at 0% is simply excluded (no split row for them).
+    const entries = spec.percentages.filter((p) => p.percent > 0)
+    await requireGroupMemberIds(groupId, [
+      payerMemberId,
+      ...entries.map((e) => e.memberId),
+    ])
+    const shares = splitByPercentages(amountMinor, entries)
+    const percentOf = new Map(entries.map((e) => [e.memberId, e.percent]))
+    return [...shares].map(([memberId, shareMinor]) => ({
+      memberId,
+      shareMinor,
+      percent: percentOf.get(memberId) ?? null,
+    }))
+  }
+
+  // EXACT — a member left at 0 is excluded.
+  const entries = spec.amounts.filter((a) => a.shareMinor > 0)
   await requireGroupMemberIds(groupId, [
     payerMemberId,
     ...entries.map((e) => e.memberId),
   ])
-  const shares = splitByPercentages(amountMinor, entries)
-  const percentOf = new Map(entries.map((e) => [e.memberId, e.percent]))
+  const shares = splitByAmounts(amountMinor, entries)
   return [...shares].map(([memberId, shareMinor]) => ({
     memberId,
     shareMinor,
-    percent: percentOf.get(memberId) ?? null,
+    percent: null,
   }))
 }
 

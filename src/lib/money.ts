@@ -91,6 +91,39 @@ export function splitByPercentages(
   return shares
 }
 
+/**
+ * "Splits" amountMinor by exact per-member amounts that must sum to it — the
+ * entered shares ARE the result, so this only validates and returns them.
+ */
+export function splitByAmounts(
+  amountMinor: number,
+  entries: { memberId: string; shareMinor: number }[],
+): Map<string, number> {
+  if (entries.length === 0) {
+    throw new Error('splitByAmounts requires at least one member')
+  }
+  if (!Number.isInteger(amountMinor) || amountMinor <= 0) {
+    throw new Error(
+      'splitByAmounts requires amountMinor to be a positive integer',
+    )
+  }
+  const ids = entries.map((e) => e.memberId)
+  if (new Set(ids).size !== ids.length) {
+    throw new Error('splitByAmounts requires unique member ids')
+  }
+  for (const { shareMinor } of entries) {
+    if (!Number.isInteger(shareMinor) || shareMinor < 0) {
+      throw new Error(
+        'splitByAmounts requires each amount to be a non-negative integer',
+      )
+    }
+  }
+  if (entries.reduce((total, e) => total + e.shareMinor, 0) !== amountMinor) {
+    throw new Error('splitByAmounts requires the amounts to sum to the total')
+  }
+  return new Map(entries.map((e) => [e.memberId, e.shareMinor]))
+}
+
 export function formatMoney(amountMinor: number, currency: string): string {
   return new Intl.NumberFormat('en-US', {
     style: 'currency',

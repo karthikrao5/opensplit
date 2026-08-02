@@ -16,6 +16,7 @@ enum TransactionKind {
 enum SplitType {
   EVEN
   PERCENTAGE
+  EXACT
 }
 
 model User {

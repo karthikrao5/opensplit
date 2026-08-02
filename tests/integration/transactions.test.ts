@@ -587,3 +587,201 @@ describe('percentage split', () => {
     expect(after.splits).toHaveLength(3)
   })
 })
+
+describe('exact split', () => {
+  it('persists splitType EXACT with the entered per-member amounts', async () => {
+    const { group, a, b, c } = await seed()
+
+    const result = await addTransaction(
+      baseInput({
+        groupId: group.id,
+        payerMemberId: a.id,
+        amountMinor: 6000,
+        splitType: 'EXACT',
+        amounts: [
+          { memberId: a.id, shareMinor: 3000 },
+          { memberId: b.id, shareMinor: 2000 },
+          { memberId: c.id, shareMinor: 1000 },
+        ],
+      }) as never,
+    )
+    expect(result.ok).toBe(true)
+
+    const tx = await prisma.transaction.findFirstOrThrow({ include: { splits: true } })
+    expect(tx.splitType).toBe('EXACT')
+    expect(tx.amountMinor).toBe(6000)
+    expect(tx.splits).toHaveLength(3)
+    expect(tx.splits.reduce((sum, s) => sum + s.shareMinor, 0)).toBe(6000)
+    const byMember = new Map(tx.splits.map((s) => [s.memberId, s]))
+    expect(byMember.get(a.id)!.shareMinor).toBe(3000)
+    expect(byMember.get(a.id)!.percent).toBeNull()
+  })
+
+  it('allows a single member with the whole amount', async () => {
+    const { group, a } = await seed()
+    const result = await addTransaction(
+      baseInput({
+        groupId: group.id,
+        payerMemberId: a.id,
+        amountMinor: 4250,
+        splitType: 'EXACT',
+        amounts: [{ memberId: a.id, shareMinor: 4250 }],
+      }) as never,
+    )
+    expect(result.ok).toBe(true)
+    const tx = await prisma.transaction.findFirstOrThrow({ include: { splits: true } })
+    expect(tx.splits).toHaveLength(1)
+    expect(tx.splits[0].shareMinor).toBe(4250)
+  })
+
+  it('excludes a member entered as 0', async () => {
+    const { group, a, b, c } = await seed()
+    const result = await addTransaction(
+      baseInput({
+        groupId: group.id,
+        payerMemberId: a.id,
+        amountMinor: 5000,
+        splitType: 'EXACT',
+        amounts: [
+          { memberId: a.id, shareMinor: 3000 },
+          { memberId: b.id, shareMinor: 2000 },
+          { memberId: c.id, shareMinor: 0 },
+        ],
+      }) as never,
+    )
+    expect(result.ok).toBe(true)
+    const tx = await prisma.transaction.findFirstOrThrow({ include: { splits: true } })
+    expect(tx.splits).toHaveLength(2)
+    expect(tx.splits.map((s) => s.memberId).sort()).toEqual([a.id, b.id].sort())
+  })
+
+  it('rejects amounts that do not sum to the total', async () => {
+    const { group, a, b } = await seed()
+    const result = await addTransaction(
+      baseInput({
+        groupId: group.id,
+        payerMemberId: a.id,
+        amountMinor: 6000,
+        splitType: 'EXACT',
+        amounts: [
+          { memberId: a.id, shareMinor: 3000 },
+          { memberId: b.id, shareMinor: 2000 },
+        ],
+      }) as never,
+    )
+    expect(result).toMatchObject({ ok: false })
+    expect(await prisma.transaction.count()).toBe(0)
+  })
+
+  it('rejects a negative amount', async () => {
+    const { group, a, b } = await seed()
+    const result = await addTransaction(
+      baseInput({
+        groupId: group.id,
+        payerMemberId: a.id,
+        amountMinor: 5000,
+        splitType: 'EXACT',
+        amounts: [
+          { memberId: a.id, shareMinor: -1000 },
+          { memberId: b.id, shareMinor: 6000 },
+        ],
+      }) as never,
+    )
+    expect(result).toMatchObject({ ok: false })
+    expect(await prisma.transaction.count()).toBe(0)
+  })
+
+  it('rejects an exact split member from another group', async () => {
+    const { group, a } = await seed()
+    const other = await prisma.group.create({
+      data: {
+        name: 'Other',
+        currency: 'USD',
+        members: { create: [{ displayName: 'Outsider', claimToken: 'tok' }] },
+      },
+      include: { members: true },
+    })
+    const result = await addTransaction(
+      baseInput({
+        groupId: group.id,
+        payerMemberId: a.id,
+        amountMinor: 5000,
+        splitType: 'EXACT',
+        amounts: [
+          { memberId: a.id, shareMinor: 2500 },
+          { memberId: other.members[0].id, shareMinor: 2500 },
+        ],
+      }) as never,
+    )
+    expect(result).toEqual({ ok: false, error: 'Not found' })
+    expect(await prisma.transaction.count()).toBe(0)
+  })
+
+  it('switches an even transaction to an exact split', async () => {
+    const { group, a, b, c } = await seed()
+    await addTransaction(
+      baseInput({
+        groupId: group.id,
+        payerMemberId: a.id,
+        includedMemberIds: [a.id, b.id, c.id],
+      }) as never,
+    )
+    const before = await prisma.transaction.findFirstOrThrow()
+
+    const result = await updateTransaction({
+      transactionId: before.id,
+      groupId: group.id,
+      description: 'Dinner',
+      amountMinor: 5000,
+      payerMemberId: a.id,
+      splitType: 'EXACT',
+      amounts: [
+        { memberId: a.id, shareMinor: 2000 },
+        { memberId: b.id, shareMinor: 3000 },
+      ],
+      occurredAt: '2026-07-29',
+    })
+    expect(result.ok).toBe(true)
+
+    const after = await prisma.transaction.findFirstOrThrow({ include: { splits: true } })
+    expect(after.splitType).toBe('EXACT')
+    expect(after.amountMinor).toBe(5000)
+    expect(after.splits).toHaveLength(2)
+    const byMember = new Map(after.splits.map((s) => [s.memberId, s]))
+    expect(byMember.get(b.id)!.shareMinor).toBe(3000)
+  })
+
+  it('switches an exact split back to even and clears percent', async () => {
+    const { group, a, b } = await seed()
+    await addTransaction(
+      baseInput({
+        groupId: group.id,
+        payerMemberId: a.id,
+        amountMinor: 5000,
+        splitType: 'EXACT',
+        amounts: [
+          { memberId: a.id, shareMinor: 2000 },
+          { memberId: b.id, shareMinor: 3000 },
+        ],
+      }) as never,
+    )
+    const before = await prisma.transaction.findFirstOrThrow()
+
+    const result = await updateTransaction({
+      transactionId: before.id,
+      groupId: group.id,
+      description: 'Dinner',
+      amountMinor: 5000,
+      payerMemberId: a.id,
+      splitType: 'EVEN',
+      includedMemberIds: [a.id, b.id],
+      occurredAt: '2026-07-29',
+    })
+    expect(result.ok).toBe(true)
+
+    const after = await prisma.transaction.findFirstOrThrow({ include: { splits: true } })
+    expect(after.splitType).toBe('EVEN')
+    expect(after.splits.every((s) => s.percent === null)).toBe(true)
+    expect(after.splits.reduce((sum, s) => sum + s.shareMinor, 0)).toBe(5000)
+  })
+})

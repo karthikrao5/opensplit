@@ -40,6 +40,13 @@ export default async function GroupPage({
     percentages: tx.splits
       .filter((s) => s.percent !== null)
       .map((s) => ({ memberId: s.memberId, percent: s.percent as number })),
+    amounts:
+      tx.splitType === 'EXACT'
+        ? tx.splits.map((s) => ({
+            memberId: s.memberId,
+            amountMinor: s.shareMinor,
+          }))
+        : [],
     payerName: nameOf(tx.payerMemberId),
     recipientName:
       tx.kind === 'SETTLEMENT' && tx.splits[0]

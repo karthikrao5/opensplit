@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   formatMoney,
   parseAmountToMinor,
+  splitByAmounts,
   splitByPercentages,
   splitEvenly,
 } from '@/lib/money'
@@ -166,6 +167,74 @@ describe('splitByPercentages', () => {
       splitByPercentages(100, [
         { memberId: 'a', percent: 50 },
         { memberId: 'a', percent: 50 },
+      ]),
+    ).toThrow(/unique member ids/)
+  })
+})
+
+describe('splitByAmounts', () => {
+  it('returns the entered amounts when they sum to the total', () => {
+    const shares = splitByAmounts(6000, [
+      { memberId: 'a', shareMinor: 3000 },
+      { memberId: 'b', shareMinor: 2000 },
+      { memberId: 'c', shareMinor: 1000 },
+    ])
+    expect(shares.get('a')).toBe(3000)
+    expect(shares.get('b')).toBe(2000)
+    expect(shares.get('c')).toBe(1000)
+    expect(sum(shares)).toBe(6000)
+  })
+
+  it('allows a single member with the whole amount', () => {
+    const shares = splitByAmounts(4250, [{ memberId: 'a', shareMinor: 4250 }])
+    expect(shares.get('a')).toBe(4250)
+  })
+
+  it('rejects an empty member list', () => {
+    expect(() => splitByAmounts(100, [])).toThrow(/at least one member/)
+  })
+
+  it('rejects a non-positive or non-integer amount', () => {
+    const entries = [{ memberId: 'a', shareMinor: 100 }]
+    expect(() => splitByAmounts(0, entries)).toThrow(/positive integer/)
+    expect(() => splitByAmounts(1.5, entries)).toThrow(/positive integer/)
+  })
+
+  it('rejects a negative or non-integer share', () => {
+    expect(() =>
+      splitByAmounts(100, [
+        { memberId: 'a', shareMinor: -50 },
+        { memberId: 'b', shareMinor: 150 },
+      ]),
+    ).toThrow(/non-negative integer/)
+    expect(() =>
+      splitByAmounts(100, [
+        { memberId: 'a', shareMinor: 50.5 },
+        { memberId: 'b', shareMinor: 49.5 },
+      ]),
+    ).toThrow(/non-negative integer/)
+  })
+
+  it('rejects amounts that do not sum to the total', () => {
+    expect(() =>
+      splitByAmounts(100, [
+        { memberId: 'a', shareMinor: 60 },
+        { memberId: 'b', shareMinor: 30 },
+      ]),
+    ).toThrow(/sum to the total/)
+    expect(() =>
+      splitByAmounts(100, [
+        { memberId: 'a', shareMinor: 60 },
+        { memberId: 'b', shareMinor: 50 },
+      ]),
+    ).toThrow(/sum to the total/)
+  })
+
+  it('rejects duplicate member ids', () => {
+    expect(() =>
+      splitByAmounts(100, [
+        { memberId: 'a', shareMinor: 50 },
+        { memberId: 'a', shareMinor: 50 },
       ]),
     ).toThrow(/unique member ids/)
   })

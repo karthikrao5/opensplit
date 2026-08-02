@@ -38,8 +38,9 @@ export type EditingTransaction = {
   payerMemberId: string
   includedMemberIds: string[]
   occurredAt: string // YYYY-MM-DD
-  splitType: 'EVEN' | 'PERCENTAGE'
+  splitType: 'EVEN' | 'PERCENTAGE' | 'EXACT'
   percentages: { memberId: string; percent: number }[]
+  amounts: { memberId: string; amountMinor: number }[]
 }
 
 export function AddTransactionDialog({
@@ -73,7 +74,7 @@ export function AddTransactionDialog({
   const [included, setIncluded] = useState<string[]>(
     editing?.includedMemberIds ?? members.map((m) => m.id),
   )
-  const [splitType, setSplitType] = useState<'EVEN' | 'PERCENTAGE'>(
+  const [splitType, setSplitType] = useState<'EVEN' | 'PERCENTAGE' | 'EXACT'>(
     editing?.splitType ?? 'EVEN',
   )
   const [percentTexts, setPercentTexts] = useState<Record<string, string>>(() =>
@@ -81,10 +82,18 @@ export function AddTransactionDialog({
       (editing?.percentages ?? []).map((p) => [p.memberId, String(p.percent)]),
     ),
   )
+  const [amountTexts, setAmountTexts] = useState<Record<string, string>>(() =>
+    Object.fromEntries(
+      (editing?.amounts ?? []).map((a) => [
+        a.memberId,
+        (a.amountMinor / 100).toFixed(2),
+      ]),
+    ),
+  )
   const [error, setError] = useState<string | null>(null)
   const [pending, startTransition] = useTransition()
 
-  const amountMinor = parseAmountToMinor(amountText)
+  const parsedAmount = parseAmountToMinor(amountText)
 
   // Members with a valid, non-zero whole-number percentage (blank/malformed
   // input is simply excluded, so the total falls short of 100 rather than erroring).
@@ -97,8 +106,25 @@ export function AddTransactionDialog({
   )
   const percentTotal = percentEntries.reduce((sum, e) => sum + e.percent, 0)
 
+  // Members with a valid, positive exact amount (blank/malformed excluded).
+  const exactEntries = useMemo(
+    () =>
+      members
+        .map((m) => ({
+          memberId: m.id,
+          shareMinor: parseAmountToMinor(amountTexts[m.id] ?? '') ?? 0,
+        }))
+        .filter((e) => e.shareMinor > 0),
+    [members, amountTexts],
+  )
+  const exactTotal = exactEntries.reduce((sum, e) => sum + e.shareMinor, 0)
+
+  // In EXACT mode the transaction total is the sum of the per-member amounts.
+  const amountMinor =
+    splitType === 'EXACT' ? (exactTotal > 0 ? exactTotal : null) : parsedAmount
+
   const preview = useMemo(() => {
-    if (!amountMinor) return null
+    if (!amountMinor || splitType === 'EXACT') return null
     try {
       let shares: Map<string, number>
       if (splitType === 'PERCENTAGE') {
@@ -129,7 +155,13 @@ export function AddTransactionDialog({
 
   function submit() {
     setError(null)
-    if (!amountMinor) return setError('Enter an amount like 42.50')
+    if (!amountMinor) {
+      return setError(
+        splitType === 'EXACT'
+          ? 'Enter an amount for at least one person'
+          : 'Enter an amount like 42.50',
+      )
+    }
 
     const base = { groupId, description, amountMinor, payerMemberId, occurredAt }
     let payload
@@ -138,6 +170,8 @@ export function AddTransactionDialog({
         return setError('Percentages must add up to 100')
       }
       payload = { ...base, splitType: 'PERCENTAGE' as const, percentages: percentEntries }
+    } else if (splitType === 'EXACT') {
+      payload = { ...base, splitType: 'EXACT' as const, amounts: exactEntries }
     } else {
       payload = { ...base, splitType: 'EVEN' as const, includedMemberIds: included }
     }
@@ -161,6 +195,7 @@ export function AddTransactionDialog({
       setIncluded(members.map((m) => m.id))
       setSplitType('EVEN')
       setPercentTexts({})
+      setAmountTexts({})
     })
   }
 
@@ -182,13 +217,27 @@ export function AddTransactionDialog({
         <div className="flex flex-col gap-4">
           <div className="flex flex-col gap-2">
             <Label htmlFor="amount">Amount ({currency})</Label>
-            <Input
-              id="amount"
-              inputMode="decimal"
-              value={amountText}
-              onChange={(e) => setAmountText(e.target.value)}
-              placeholder="42.50"
-            />
+            {splitType === 'EXACT' ? (
+              <>
+                <Input
+                  id="amount"
+                  readOnly
+                  aria-label="Total amount"
+                  value={exactTotal ? (exactTotal / 100).toFixed(2) : '0.00'}
+                />
+                <p className="text-xs text-muted-foreground">
+                  Sum of the amounts below
+                </p>
+              </>
+            ) : (
+              <Input
+                id="amount"
+                inputMode="decimal"
+                value={amountText}
+                onChange={(e) => setAmountText(e.target.value)}
+                placeholder="42.50"
+              />
+            )}
           </div>
 
           <div className="flex flex-col gap-2">
@@ -247,44 +296,78 @@ export function AddTransactionDialog({
                 type="button"
                 variant={splitType === 'PERCENTAGE' ? 'default' : 'ghost'}
                 size="sm"
-                className="rounded-l-none border-l"
+                className="rounded-none border-l"
                 onClick={() => setSplitType('PERCENTAGE')}
               >
                 By percentage
               </Button>
+              <Button
+                type="button"
+                variant={splitType === 'EXACT' ? 'default' : 'ghost'}
+                size="sm"
+                className="rounded-l-none border-l"
+                onClick={() => setSplitType('EXACT')}
+              >
+                By amount
+              </Button>
             </div>
 
-            {splitType === 'EVEN'
-              ? members.map((m) => (
-                  <label key={m.id} className="flex items-center gap-2 text-sm">
-                    <Checkbox
-                      checked={included.includes(m.id)}
-                      onCheckedChange={() => toggle(m.id)}
-                    />
+            {splitType === 'EVEN' &&
+              members.map((m) => (
+                <label key={m.id} className="flex items-center gap-2 text-sm">
+                  <Checkbox
+                    checked={included.includes(m.id)}
+                    onCheckedChange={() => toggle(m.id)}
+                  />
+                  {m.displayName}
+                </label>
+              ))}
+
+            {splitType === 'PERCENTAGE' &&
+              members.map((m) => (
+                <div key={m.id} className="flex items-center gap-2 text-sm">
+                  <span className="min-w-0 flex-1 break-words">
                     {m.displayName}
-                  </label>
-                ))
-              : members.map((m) => (
-                  <div key={m.id} className="flex items-center gap-2 text-sm">
-                    <span className="min-w-0 flex-1 break-words">
-                      {m.displayName}
-                    </span>
-                    <Input
-                      className="w-20"
-                      inputMode="numeric"
-                      aria-label={`${m.displayName} percentage`}
-                      value={percentTexts[m.id] ?? ''}
-                      onChange={(e) =>
-                        setPercentTexts((prev) => ({
-                          ...prev,
-                          [m.id]: e.target.value,
-                        }))
-                      }
-                      placeholder="0"
-                    />
-                    <span className="text-muted-foreground">%</span>
-                  </div>
-                ))}
+                  </span>
+                  <Input
+                    className="w-20"
+                    inputMode="numeric"
+                    aria-label={`${m.displayName} percentage`}
+                    value={percentTexts[m.id] ?? ''}
+                    onChange={(e) =>
+                      setPercentTexts((prev) => ({
+                        ...prev,
+                        [m.id]: e.target.value,
+                      }))
+                    }
+                    placeholder="0"
+                  />
+                  <span className="text-muted-foreground">%</span>
+                </div>
+              ))}
+
+            {splitType === 'EXACT' &&
+              members.map((m) => (
+                <div key={m.id} className="flex items-center gap-2 text-sm">
+                  <span className="min-w-0 flex-1 break-words">
+                    {m.displayName}
+                  </span>
+                  <span className="text-muted-foreground">{currency}</span>
+                  <Input
+                    className="w-24"
+                    inputMode="decimal"
+                    aria-label={`${m.displayName} amount`}
+                    value={amountTexts[m.id] ?? ''}
+                    onChange={(e) =>
+                      setAmountTexts((prev) => ({
+                        ...prev,
+                        [m.id]: e.target.value,
+                      }))
+                    }
+                    placeholder="0.00"
+                  />
+                </div>
+              ))}
 
             {splitType === 'PERCENTAGE' && (
               <p
@@ -311,7 +394,9 @@ export function AddTransactionDialog({
           <Button
             onClick={submit}
             disabled={
-              pending || (splitType === 'PERCENTAGE' && percentTotal !== 100)
+              pending ||
+              (splitType === 'PERCENTAGE' && percentTotal !== 100) ||
+              (splitType === 'EXACT' && !exactTotal)
             }
           >
             {pending ? 'Saving…' : 'Save'}
