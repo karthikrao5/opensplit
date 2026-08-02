@@ -1,5 +1,6 @@
 import Link from 'next/link'
 import { NewGroupDialog } from '@/components/new-group-dialog'
+import { ThemeToggle } from '@/components/theme-toggle'
 import { Card, CardContent } from '@/components/ui/card'
 import { requireUser } from '@/lib/auth'
 import { computeBalances } from '@/lib/balances'
@@ -28,7 +29,10 @@ export default async function GroupsPage() {
     <main className="flex flex-col gap-6">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-semibold">Your groups</h1>
-        <NewGroupDialog />
+        <div className="flex items-center gap-2">
+          <ThemeToggle />
+          <NewGroupDialog />
+        </div>
       </div>
 
       {groups.length === 0 && (

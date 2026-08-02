@@ -1,4 +1,7 @@
+import { ArrowLeftIcon } from 'lucide-react'
+import Link from 'next/link'
 import { GroupNav } from '@/components/group-nav'
+import { Button } from '@/components/ui/button'
 import { pageMembership } from '@/lib/membership'
 
 export default async function GroupLayout({
@@ -14,9 +17,16 @@ export default async function GroupLayout({
   return (
     // pb leaves room for the fixed bottom nav so content is never hidden behind it.
     <div className="flex flex-col gap-6 pb-24">
-      <header className="min-w-0">
-        <h1 className="truncate text-2xl font-semibold">{group.name}</h1>
-        <p className="text-sm text-muted-foreground">{group.currency}</p>
+      <header className="flex items-center gap-3">
+        <Button asChild variant="ghost" size="icon-sm" className="shrink-0">
+          <Link href="/groups" aria-label="Back to groups">
+            <ArrowLeftIcon />
+          </Link>
+        </Button>
+        <div className="min-w-0">
+          <h1 className="truncate text-2xl font-semibold">{group.name}</h1>
+          <p className="text-sm text-muted-foreground">{group.currency}</p>
+        </div>
       </header>
       {children}
       <GroupNav groupId={group.id} />

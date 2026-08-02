@@ -1,7 +1,6 @@
 import type { Metadata } from 'next'
 import { Inter } from 'next/font/google'
 import { ThemeProvider } from '@/components/theme-provider'
-import { ThemeToggle } from '@/components/theme-toggle'
 import './globals.css'
 
 // Self-hosted at build time by next/font. Bound to the `--font-sans` variable
@@ -36,12 +35,7 @@ export default function RootLayout({
           enableSystem
           disableTransitionOnChange
         >
-          <div className="mx-auto max-w-2xl px-4 py-8">
-            <div className="mb-2 flex justify-end">
-              <ThemeToggle />
-            </div>
-            {children}
-          </div>
+          <div className="mx-auto max-w-2xl px-4 py-8">{children}</div>
         </ThemeProvider>
       </body>
     </html>
