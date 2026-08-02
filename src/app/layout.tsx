@@ -12,7 +12,13 @@ const inter = Inter({
   display: 'swap',
 })
 
-export const metadata: Metadata = { title: 'OpenSplit' }
+export const metadata: Metadata = {
+  title: 'OpenSplit',
+  // The app has its own dark mode (next-themes); tell the Dark Reader extension
+  // to stand down so it doesn't rewrite SVG attributes before hydration (which
+  // caused a hydration mismatch) or double-apply a dark theme.
+  other: { 'darkreader-lock': 'true' },
+}
 
 export default function RootLayout({
   children,

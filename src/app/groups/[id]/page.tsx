@@ -41,7 +41,8 @@ export default async function GroupTransactionsPage({
         ? nameOf(tx.splits[0].memberId)
         : null,
     splitCount: tx.splits.length,
-    occurredAt: tx.occurredAt.toISOString().slice(0, 10),
+    // Pass the raw UTC instant; the client formats it to the viewer's local time.
+    occurredAt: tx.occurredAt,
   }))
 
   const memberOptions = members.map((m) => ({
@@ -56,6 +57,7 @@ export default async function GroupTransactionsPage({
         currency={group.currency}
         members={memberOptions}
         defaultPayerId={you.id}
+        currentMemberId={you.id}
         transactions={rows}
       />
       <div className="flex justify-center pt-2">
