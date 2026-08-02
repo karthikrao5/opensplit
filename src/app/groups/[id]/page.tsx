@@ -1,31 +1,19 @@
-import { GroupView } from '@/components/group-view'
-import type { TransactionRow } from '@/components/transaction-list'
-import { computeBalances, suggestTransfers } from '@/lib/balances'
-import { prisma } from '@/lib/db'
-import { pageMembership } from '@/lib/membership'
+import { AddTransactionDialog } from '@/components/add-transaction-dialog'
+import {
+  TransactionList,
+  type TransactionRow,
+} from '@/components/transaction-list'
+import { loadGroup, loadTransactions } from './load-group'
 
-export default async function GroupPage({
+export default async function GroupTransactionsPage({
   params,
 }: {
   params: Promise<{ id: string }>
 }) {
   const { id } = await params
-  const { user, member: you, group } = await pageMembership(id)
+  const { you, group, members } = await loadGroup(id)
+  const transactions = await loadTransactions(group.id)
 
-  const members = await prisma.groupMember.findMany({
-    where: { groupId: group.id },
-    orderBy: { createdAt: 'asc' },
-  })
-
-  const transactions = await prisma.transaction.findMany({
-    where: { groupId: group.id },
-    orderBy: [{ occurredAt: 'desc' }, { createdAt: 'desc' }],
-    include: { splits: true },
-  })
-
-  const memberIds = members.map((m) => m.id)
-  const balances = computeBalances(memberIds, transactions)
-  const transfers = suggestTransfers(balances)
   const nameOf = (memberId: string) =>
     members.find((m) => m.id === memberId)?.displayName ?? 'Unknown'
 
@@ -56,32 +44,28 @@ export default async function GroupPage({
     occurredAt: tx.occurredAt.toISOString().slice(0, 10),
   }))
 
-  const baseUrl = process.env.APP_BASE_URL ?? 'http://localhost:3000'
+  const memberOptions = members.map((m) => ({
+    id: m.id,
+    displayName: m.displayName,
+  }))
 
   return (
-    <GroupView
-      groupId={group.id}
-      groupName={group.name}
-      currency={group.currency}
-      memberOptions={members.map((m) => ({
-        id: m.id,
-        displayName: m.displayName,
-      }))}
-      memberRows={members.map((m) => ({
-        id: m.id,
-        displayName: m.displayName,
-        isYou: m.userId === user.id,
-        claimToken: m.claimToken,
-      }))}
-      balances={memberIds.map((memberId) => ({
-        memberId,
-        net: balances.get(memberId) ?? 0,
-      }))}
-      transfers={transfers}
-      yourMemberId={you.id}
-      defaultPayerId={you.id}
-      transactions={rows}
-      baseUrl={baseUrl}
-    />
+    <section className="flex flex-col gap-4">
+      <TransactionList
+        groupId={group.id}
+        currency={group.currency}
+        members={memberOptions}
+        defaultPayerId={you.id}
+        transactions={rows}
+      />
+      <div className="flex justify-center pt-2">
+        <AddTransactionDialog
+          groupId={group.id}
+          currency={group.currency}
+          members={memberOptions}
+          defaultPayerId={you.id}
+        />
+      </div>
+    </section>
   )
 }

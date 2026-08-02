@@ -67,7 +67,7 @@ export async function renameGroup(input: {
 
   if (result.ok) {
     revalidatePath('/groups')
-    revalidatePath(`/groups/${input.groupId}`)
+    revalidatePath('/groups/[id]', 'layout')
   }
   return result
 }

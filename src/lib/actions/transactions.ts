@@ -240,7 +240,7 @@ export async function addTransaction(input: ExpenseInput): Promise<ActionResult>
     })
   })
 
-  if (result.ok) revalidatePath(`/groups/${input.groupId}`)
+  if (result.ok) revalidatePath('/groups/[id]', 'layout')
   return result
 }
 
@@ -287,7 +287,7 @@ export async function updateTransaction(
     ])
   })
 
-  if (result.ok) revalidatePath(`/groups/${input.groupId}`)
+  if (result.ok) revalidatePath('/groups/[id]', 'layout')
   return result
 }
 
@@ -310,7 +310,7 @@ export async function deleteTransaction(input: {
     if (deleted.count === 0) throw new NotMemberError()
   })
 
-  if (result.ok) revalidatePath(`/groups/${input.groupId}`)
+  if (result.ok) revalidatePath('/groups/[id]', 'layout')
   return result
 }
 
@@ -353,6 +353,6 @@ export async function recordSettlement(input: {
     })
   })
 
-  if (result.ok) revalidatePath(`/groups/${input.groupId}`)
+  if (result.ok) revalidatePath('/groups/[id]', 'layout')
   return result
 }

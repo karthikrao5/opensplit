@@ -42,7 +42,7 @@ export async function addPlaceholderMember(input: {
     })
   })
 
-  if (result.ok) revalidatePath(`/groups/${input.groupId}`)
+  if (result.ok) revalidatePath('/groups/[id]', 'layout')
   return result
 }
 
@@ -95,7 +95,7 @@ export async function removeMember(input: {
     await prisma.groupMember.delete({ where: { id: parsed.data.memberId } })
   })
 
-  if (result.ok) revalidatePath(`/groups/${input.groupId}`)
+  if (result.ok) revalidatePath('/groups/[id]', 'layout')
   return result
 }
 
@@ -129,7 +129,7 @@ export async function renameMember(input: {
     })
   })
 
-  if (result.ok) revalidatePath(`/groups/${input.groupId}`)
+  if (result.ok) revalidatePath('/groups/[id]', 'layout')
   return result
 }
 
@@ -213,7 +213,7 @@ export async function claimMember(input: {
 
   if (result.ok && groupId) {
     revalidatePath('/groups')
-    revalidatePath(`/groups/${groupId}`)
+    revalidatePath('/groups/[id]', 'layout')
   }
   return { ...result, groupId }
 }
