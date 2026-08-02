@@ -186,7 +186,7 @@ export function TransactionList({
             <Button
               variant="ghost"
               size="sm"
-              className="ml-auto shrink-0 text-destructive"
+              className="ml-auto shrink-0 self-center text-destructive"
               disabled={pending}
               onClick={(e) => {
                 e.stopPropagation()
