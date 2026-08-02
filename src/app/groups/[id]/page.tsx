@@ -1,4 +1,3 @@
-import { AddTransactionDialog } from '@/components/add-transaction-dialog'
 import {
   TransactionList,
   type TransactionRow,
@@ -51,23 +50,13 @@ export default async function GroupTransactionsPage({
   }))
 
   return (
-    <section className="flex flex-col gap-4">
-      <TransactionList
-        groupId={group.id}
-        currency={group.currency}
-        members={memberOptions}
-        defaultPayerId={you.id}
-        currentMemberId={you.id}
-        transactions={rows}
-      />
-      <div className="flex justify-center pt-2">
-        <AddTransactionDialog
-          groupId={group.id}
-          currency={group.currency}
-          members={memberOptions}
-          defaultPayerId={you.id}
-        />
-      </div>
-    </section>
+    <TransactionList
+      groupId={group.id}
+      currency={group.currency}
+      members={memberOptions}
+      defaultPayerId={you.id}
+      currentMemberId={you.id}
+      transactions={rows}
+    />
   )
 }
